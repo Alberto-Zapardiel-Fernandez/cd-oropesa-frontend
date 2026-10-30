@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* Mejora global de UX: Cursor de mano en todos los elementos interactivos */
+button,
+select,
+input[type="submit"],
+input[type="button"],
+[role="button"] {
+  cursor: pointer;
+}

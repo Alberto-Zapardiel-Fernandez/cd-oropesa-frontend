@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import Input from '../components/Input'
+import Input from '../components/common/Input'
 
 export default function LoginPage({ onLoginSuccess }) {
   const [email, setEmail] = useState('')
