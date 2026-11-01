@@ -10,6 +10,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('authToken')
+    localStorage.removeItem('userRole')
     setIsAuthenticated(false)
   }
 

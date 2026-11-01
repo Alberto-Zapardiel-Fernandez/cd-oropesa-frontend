@@ -1,174 +1,446 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Input from '../common/Input'
 import { fetchApi } from '../../services/api'
 import { CARD_STYLES } from '../common/theme'
 
+const EMPTY_OPPONENT_FORM = {
+  name: '',
+  contactPerson: '',
+  contactPhone: '',
+  contactEmail: '',
+  notes: ''
+}
+
+const EMPTY_TEAM_FORM = {
+  name: '',
+  categoryId: '',
+  seasonId: '',
+  groupName: ''
+}
+
+const SELECT_STYLES =
+  'w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600'
+
 export default function AdminTeams() {
+  const [opponents, setOpponents] = useState([])
+  const [opponentForm, setOpponentForm] = useState(EMPTY_OPPONENT_FORM)
+  const [opponentSearch, setOpponentSearch] = useState('')
+
   const [teams, setTeams] = useState([])
   const [categories, setCategories] = useState([])
-  const [formData, setFormData] = useState({
-    name: '',
-    categoryId: '',
-    seasonId: '', // UUID por defecto o configurable
-    groupName: ''
-  })
-  const [loading, setLoading] = useState(false)
+  const [seasons, setSeasons] = useState([])
+  const [teamForm, setTeamForm] = useState(EMPTY_TEAM_FORM)
+
+  const [loadingData, setLoadingData] = useState(true)
+  const [savingOpponent, setSavingOpponent] = useState(false)
+  const [savingTeam, setSavingTeam] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    async function loadInitialData() {
+    async function loadData() {
       try {
-        const [teamsData, categoriesData] = await Promise.all([fetchApi('/teams'), fetchApi('/categories')])
+        const [opponentsData, teamsData, categoriesData, seasonsData] = await Promise.all([
+          fetchApi('/opponents'),
+          fetchApi('/teams'),
+          fetchApi('/categories'),
+          fetchApi('/seasons')
+        ])
+
+        setOpponents(opponentsData)
         setTeams(teamsData)
         setCategories(categoriesData)
-        if (categoriesData.length > 0) {
-          setFormData(prev => ({ ...prev, categoryId: categoriesData[0].id }))
-        }
-      } catch {
-        setError('No se pudieron cargar los datos iniciales desde el servidor.')
+        setSeasons(seasonsData)
+
+        setTeamForm(current => ({
+          ...current,
+          categoryId: categoriesData[0]?.id || '',
+          seasonId: seasonsData.find(season => season.isCurrent)?.id || seasonsData[0]?.id || ''
+        }))
+      } catch (err) {
+        setError(err.message || 'No se pudieron cargar los datos de equipos y rivales.')
+      } finally {
+        setLoadingData(false)
       }
     }
-    loadInitialData()
+
+    loadData()
   }, [])
 
-  const handleChange = e => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+  const handleOpponentFormChange = event => {
+    const { name, value } = event.target
+    setOpponentForm(current => ({ ...current, [name]: value }))
   }
 
-  const handleAddTeam = async e => {
-    e.preventDefault()
-    const trimmedName = formData.name.trim()
-    if (!trimmedName || !formData.categoryId) return
+  const handleTeamFormChange = event => {
+    const { name, value } = event.target
+    setTeamForm(current => ({ ...current, [name]: value }))
+  }
 
-    setLoading(true)
+  const handleAddOpponent = async event => {
+    event.preventDefault()
     setError('')
+
+    const name = opponentForm.name.trim()
+
+    if (!name) {
+      setError('El nombre del equipo rival es obligatorio.')
+      return
+    }
+
+    const alreadyExists = opponents.some(opponent => opponent.name.toLocaleLowerCase() === name.toLocaleLowerCase())
+
+    if (alreadyExists) {
+      setError('Ese equipo rival ya está registrado.')
+      return
+    }
+
+    setSavingOpponent(true)
+
+    try {
+      const newOpponent = await fetchApi('/opponents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          contactPerson: opponentForm.contactPerson.trim(),
+          contactPhone: opponentForm.contactPhone.trim(),
+          contactEmail: opponentForm.contactEmail.trim(),
+          notes: opponentForm.notes.trim()
+        })
+      })
+
+      setOpponents(current => [...current, newOpponent])
+      setOpponentForm(EMPTY_OPPONENT_FORM)
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar el equipo rival.')
+    } finally {
+      setSavingOpponent(false)
+    }
+  }
+
+  const handleDeleteOpponent = async opponent => {
+    const confirmed = window.confirm(`¿Quieres eliminar el rival "${opponent.name}"?`)
+
+    if (!confirmed) return
+
+    setError('')
+
+    try {
+      await fetchApi(`/opponents/${opponent.id}`, { method: 'DELETE' })
+      setOpponents(current => current.filter(item => item.id !== opponent.id))
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el rival. Comprueba si ya está asociado a un partido.')
+    }
+  }
+
+  const handleAddTeam = async event => {
+    event.preventDefault()
+    setError('')
+
+    if (!teamForm.name.trim() || !teamForm.categoryId || !teamForm.seasonId) {
+      setError('Completa el nombre, la categoría y la temporada del equipo.')
+      return
+    }
+
+    setSavingTeam(true)
 
     try {
       const newTeam = await fetchApi('/teams', {
         method: 'POST',
         body: JSON.stringify({
-          name: trimmedName,
-          categoryId: formData.categoryId,
-          seasonId: formData.seasonId,
-          groupName: formData.groupName.trim()
+          name: teamForm.name.trim(),
+          categoryId: teamForm.categoryId,
+          seasonId: teamForm.seasonId,
+          groupName: teamForm.groupName.trim()
         })
       })
 
-      setTeams(prev => [...prev, newTeam])
-      setFormData(prev => ({ ...prev, name: '', groupName: '' }))
+      setTeams(current => [...current, newTeam])
+      setTeamForm(current => ({
+        ...current,
+        name: '',
+        groupName: ''
+      }))
     } catch (err) {
-      setError(err.message || 'Error al crear el equipo.')
+      setError(err.message || 'No se pudo guardar el equipo del club.')
     } finally {
-      setLoading(false)
+      setSavingTeam(false)
     }
   }
 
-  const handleDelete = async id => {
-    if (window.confirm('¿Estás seguro de eliminar este equipo?')) {
-      try {
-        await fetchApi(`/teams/${id}`, { method: 'DELETE' })
-        setTeams(prev => prev.filter(t => t.id !== id))
-      } catch {
-        alert('No se pudo eliminar el equipo.')
-      }
+  const handleDeleteTeam = async team => {
+    const confirmed = window.confirm(`¿Quieres eliminar el equipo "${team.name}"?`)
+
+    if (!confirmed) return
+
+    setError('')
+
+    try {
+      await fetchApi(`/teams/${team.id}`, { method: 'DELETE' })
+      setTeams(current => current.filter(item => item.id !== team.id))
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el equipo.')
     }
   }
+
+  const search = opponentSearch.trim().toLocaleLowerCase()
+  const visibleOpponents = opponents.filter(opponent => opponent.name.toLocaleLowerCase().includes(search))
 
   return (
-    <div className={CARD_STYLES.panel}>
-      <div>
-        <h3 className='text-lg font-black text-white tracking-wide'>Gestión de Equipos (Base de Datos)</h3>
-        <p className='text-xs text-slate-400 mt-0.5'>Añade o elimina los equipos oficiales del club vinculados a sus categorías.</p>
-      </div>
+    <div className={`${CARD_STYLES.panel} space-y-8`}>
+      {error && <p className='rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-300'>{error}</p>}
 
-      {error && <div className='bg-red-500/10 border border-red-500/30 rounded-2xl p-3 text-center text-xs text-red-400'>{error}</div>}
-
-      <form
-        onSubmit={handleAddTeam}
-        className='space-y-4'
-      >
-        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end'>
-          <Input
-            label='Nombre del Equipo'
-            name='name'
-            value={formData.name}
-            onChange={handleChange}
-            placeholder='Ej: CD Oropesa Cadete A'
-            required
-          />
-
-          <div className='space-y-1.5'>
-            <label className='block text-xs font-bold uppercase tracking-wider text-slate-400'>Categoría</label>
-            <select
-              name='categoryId'
-              value={formData.categoryId}
-              onChange={handleChange}
-              className='w-full px-4 py-3.5 bg-slate-950 border border-slate-800 rounded-2xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition cursor-pointer'
-              required
-            >
-              {categories.map(cat => (
-                <option
-                  key={cat.id}
-                  value={cat.id}
-                >
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <Input
-            label='Grupo'
-            name='groupName'
-            value={formData.groupName}
-            onChange={handleChange}
-            placeholder='Ej: Grupo 1 Provincial'
-          />
-
-          <Input
-            label='ID de Temporada'
-            name='seasonId'
-            value={formData.seasonId}
-            onChange={handleChange}
-            placeholder='UUID de Temporada'
-            required
-          />
-        </div>
-
-        <button
-          type='submit'
-          disabled={loading}
-          className='w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-sm shadow-lg shadow-blue-600/20 transition cursor-pointer disabled:opacity-50'
-        >
-          {loading ? 'Guardando...' : 'Añadir Equipo'}
-        </button>
-      </form>
-
-      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2'>
-        {teams.map(team => {
-          const categoryObj = categories.find(c => c.id === team.categoryId)
-          return (
-            <div
-              key={team.id}
-              className={`flex items-center justify-between px-4 py-3.5 ${CARD_STYLES.item}`}
-            >
-              <div>
-                <span className='text-sm font-bold text-white block'>{team.name}</span>
-                <span className='text-[10px] text-slate-400 block mt-0.5'>
-                  {team.groupName || 'Sin grupo'} • {categoryObj ? categoryObj.name : 'Categoría general'}
-                </span>
-              </div>
-              <button
-                onClick={() => handleDelete(team.id)}
-                className={CARD_STYLES.actionDelete}
-                title='Eliminar equipo'
-              >
-                🗑️
-              </button>
+      {loadingData ? (
+        <p className='text-sm text-slate-400'>Cargando equipos y rivales...</p>
+      ) : (
+        <>
+          <section className='space-y-4'>
+            <div className='border-b border-slate-800 pb-4'>
+              <h3 className='text-lg font-black tracking-wide text-white'>Equipos rivales</h3>
+              <p className='mt-1 text-xs text-slate-400'>Registra los equipos visitantes y sus datos de contacto.</p>
             </div>
-          )
-        })}
-      </div>
+
+            <form
+              onSubmit={handleAddOpponent}
+              className='space-y-4'
+            >
+              <div className='grid gap-3 sm:grid-cols-2'>
+                <Input
+                  label='Nombre'
+                  name='name'
+                  value={opponentForm.name}
+                  onChange={handleOpponentFormChange}
+                  placeholder='C.F. Talavera Benjamín A'
+                  required
+                />
+
+                <Input
+                  label='Persona de contacto'
+                  name='contactPerson'
+                  value={opponentForm.contactPerson}
+                  onChange={handleOpponentFormChange}
+                  placeholder='Nombre de la persona de contacto'
+                />
+
+                <Input
+                  label='Teléfono de contacto'
+                  name='contactPhone'
+                  type='tel'
+                  value={opponentForm.contactPhone}
+                  onChange={handleOpponentFormChange}
+                  placeholder='Teléfono'
+                />
+
+                <Input
+                  label='Correo electrónico de contacto'
+                  name='contactEmail'
+                  type='email'
+                  value={opponentForm.contactEmail}
+                  onChange={handleOpponentFormChange}
+                  placeholder='correo@club.es'
+                />
+              </div>
+
+              <div className='space-y-1.5'>
+                <label
+                  htmlFor='opponent-notes'
+                  className='block text-xs font-bold uppercase tracking-wider text-slate-400'
+                >
+                  Notas
+                </label>
+                <textarea
+                  id='opponent-notes'
+                  name='notes'
+                  value={opponentForm.notes}
+                  onChange={handleOpponentFormChange}
+                  rows={3}
+                  className={SELECT_STYLES}
+                />
+              </div>
+
+              <button
+                type='submit'
+                disabled={savingOpponent}
+                className='w-full rounded-2xl bg-red-600 py-3.5 text-sm font-bold text-white transition hover:bg-red-500 disabled:opacity-50'
+              >
+                {savingOpponent ? 'Guardando...' : 'Añadir equipo rival'}
+              </button>
+            </form>
+
+            <Input
+              label='Buscar rival'
+              name='opponentSearch'
+              value={opponentSearch}
+              onChange={event => setOpponentSearch(event.target.value)}
+              placeholder='Escribe el nombre del equipo rival'
+            />
+
+            {visibleOpponents.length === 0 ? (
+              <p className='rounded-2xl border border-slate-800 bg-slate-950/50 p-5 text-center text-sm text-slate-500'>
+                {opponents.length === 0 ? 'Todavía no hay equipos rivales registrados.' : 'No hay rivales que coincidan con la búsqueda.'}
+              </p>
+            ) : (
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+                {visibleOpponents.map(opponent => (
+                  <div
+                    key={opponent.id}
+                    className={`flex items-start justify-between gap-3 px-4 py-3.5 ${CARD_STYLES.item}`}
+                  >
+                    <div className='min-w-0'>
+                      <span className='block text-sm font-bold text-white'>{opponent.name}</span>
+                      {opponent.contactPerson && <span className='mt-1 block text-xs text-slate-400'>Contacto: {opponent.contactPerson}</span>}
+                      {opponent.contactPhone && <span className='block text-xs text-slate-400'>Teléfono: {opponent.contactPhone}</span>}
+                      {opponent.contactEmail && <span className='block break-all text-xs text-slate-400'>Email: {opponent.contactEmail}</span>}
+                      {opponent.notes && <span className='mt-1 block text-xs text-slate-500'>{opponent.notes}</span>}
+                    </div>
+
+                    <button
+                      type='button'
+                      onClick={() => handleDeleteOpponent(opponent)}
+                      className={CARD_STYLES.actionDelete}
+                      title='Eliminar rival'
+                      aria-label={`Eliminar ${opponent.name}`}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className='space-y-4 border-t border-slate-800 pt-6'>
+            <div className='border-b border-slate-800 pb-4'>
+              <h3 className='text-lg font-black tracking-wide text-white'>Equipos del CD Oropesa</h3>
+              <p className='mt-1 text-xs text-slate-400'>Los equipos del club se vinculan a una categoría y una temporada.</p>
+            </div>
+
+            <form
+              onSubmit={handleAddTeam}
+              className='space-y-4'
+            >
+              <div className='grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                <Input
+                  label='Nombre del equipo'
+                  name='name'
+                  value={teamForm.name}
+                  onChange={handleTeamFormChange}
+                  placeholder='Ej: CD Oropesa Benjamín'
+                  required
+                />
+
+                <label className='space-y-1.5 text-xs font-bold text-slate-400'>
+                  Categoría
+                  <select
+                    name='categoryId'
+                    value={teamForm.categoryId}
+                    onChange={handleTeamFormChange}
+                    className={SELECT_STYLES}
+                    required
+                    disabled={categories.length === 0}
+                  >
+                    <option
+                      value=''
+                      disabled
+                    >
+                      Selecciona una categoría
+                    </option>
+                    {categories.map(category => (
+                      <option
+                        key={category.id}
+                        value={category.id}
+                      >
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <Input
+                  label='Grupo'
+                  name='groupName'
+                  value={teamForm.groupName}
+                  onChange={handleTeamFormChange}
+                  placeholder='Ej: Grupo 1 Provincial'
+                />
+
+                <label className='space-y-1.5 text-xs font-bold text-slate-400'>
+                  Temporada
+                  <select
+                    name='seasonId'
+                    value={teamForm.seasonId}
+                    onChange={handleTeamFormChange}
+                    className={SELECT_STYLES}
+                    required
+                    disabled={seasons.length === 0}
+                  >
+                    <option
+                      value=''
+                      disabled
+                    >
+                      Selecciona una temporada
+                    </option>
+                    {seasons.map(season => (
+                      <option
+                        key={season.id}
+                        value={season.id}
+                      >
+                        {season.name}
+                        {season.isCurrent ? ' (Activa)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <button
+                type='submit'
+                disabled={savingTeam || categories.length === 0 || seasons.length === 0}
+                className='w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-blue-500 disabled:opacity-50'
+              >
+                {savingTeam ? 'Guardando...' : 'Añadir equipo del club'}
+              </button>
+            </form>
+
+            {seasons.length === 0 && <p className='text-sm text-amber-300'>Primero crea una temporada en la pestaña Temporadas.</p>}
+
+            {teams.length === 0 ? (
+              <p className='rounded-2xl border border-slate-800 bg-slate-950/50 p-5 text-center text-sm text-slate-500'>
+                Todavía no hay equipos del club registrados.
+              </p>
+            ) : (
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+                {teams.map(team => (
+                  <div
+                    key={team.id}
+                    className={`flex items-center justify-between gap-3 px-4 py-3.5 ${CARD_STYLES.item}`}
+                  >
+                    <div>
+                      <span className='block text-sm font-bold text-white'>{team.name}</span>
+                      <span className='mt-0.5 block text-[10px] text-slate-400'>
+                        {team.groupName || 'Sin grupo'}
+                        {' · '}
+                        {team.category?.name || 'Sin categoría'}
+                        {' · '}
+                        {team.season?.name || 'Sin temporada'}
+                      </span>
+                    </div>
+
+                    <button
+                      type='button'
+                      onClick={() => handleDeleteTeam(team)}
+                      className={CARD_STYLES.actionDelete}
+                      title='Eliminar equipo'
+                      aria-label={`Eliminar ${team.name}`}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   )
 }

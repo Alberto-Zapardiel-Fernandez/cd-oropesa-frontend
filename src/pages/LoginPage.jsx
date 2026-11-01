@@ -27,8 +27,14 @@ export default function LoginPage({ onLoginSuccess }) {
       const token = data.token || data.accessToken
 
       if (!token) throw new Error('No se recibió el token de autenticación.')
+      const validRoles = ['ADMIN', 'COORDINATOR', 'COACH', 'VISITOR']
+
+      if (!validRoles.includes(data.role)) {
+        throw new Error('El servidor no devolvió un rol válido.')
+      }
 
       localStorage.setItem('authToken', token)
+      localStorage.setItem('userRole', data.role)
       onLoginSuccess()
     } catch (err) {
       setError(err.message || 'Error al conectar con el servidor.')

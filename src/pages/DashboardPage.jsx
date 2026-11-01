@@ -1,37 +1,50 @@
 import { useState } from 'react'
 import MatchesSection from '../components/matches/MatchesSection'
-import AdminCategories from '../components/admin/AdminCategories' // Ajustado con la ruta real
+import AdminCategories from '../components/admin/AdminCategories'
 import AdminTeams from '../components/admin/AdminTeams'
 import AdminSeasons from '../components/admin/AdminSeasons'
+import AdminVenues from '../components/admin/AdminVenues'
 
 export default function DashboardPage({ onLogout }) {
-  const [isAdmin] = useState(true)
+  const role = localStorage.getItem('userRole')
+  const isAdmin = role === 'ADMIN'
+
+  const roleLabels = {
+    ADMIN: 'Administrador',
+    COORDINATOR: 'Coordinador',
+    COACH: 'Entrenador',
+    VISITOR: 'Visitante'
+  }
   const [activeNav, setActiveNav] = useState('MATCHES')
   const [adminTab, setAdminTab] = useState('CATEGORIES')
 
+  const tabClass = tab =>
+    `rounded-xl px-4 py-2 text-xs font-bold transition ${
+      adminTab === tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-900 text-slate-400 hover:text-white'
+    }`
+
   return (
-    <div className='min-h-screen bg-slate-950 text-white flex flex-col'>
-      {/* Header Corporativo */}
-      <header className='bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex justify-between items-center shadow-lg'>
+    <div className='flex min-h-screen flex-col bg-slate-950 text-white'>
+      <header className='flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-6 py-4 shadow-lg backdrop-blur-md'>
         <div className='flex items-center space-x-6'>
           <div className='flex items-center space-x-3'>
-            <div className='w-9 h-9 relative bg-white rounded-xl p-1 shadow-md border border-slate-700 flex items-center justify-center overflow-hidden'>
+            <div className='relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-slate-700 bg-white p-1 shadow-md'>
               <img
                 src='/escudo.png'
                 alt='Escudo'
-                className='object-contain w-full h-full'
+                className='h-full w-full object-contain'
               />
             </div>
             <div>
               <h1 className='text-sm font-black tracking-wide text-white'>CD OROPESA</h1>
-              <p className='text-[10px] text-blue-400 font-bold uppercase tracking-wider'>Gestión Club</p>
+              <p className='text-[10px] font-bold uppercase tracking-wider text-blue-400'>Gestión Club</p>
             </div>
           </div>
 
-          <nav className='hidden md:flex space-x-1 pl-4 border-l border-slate-800'>
+          <nav className='hidden space-x-1 border-l border-slate-800 pl-4 md:flex'>
             <button
               onClick={() => setActiveNav('MATCHES')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`cursor-pointer rounded-xl px-3 py-2 text-xs font-bold transition ${
                 activeNav === 'MATCHES' ? 'bg-slate-800 text-blue-400' : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -41,7 +54,7 @@ export default function DashboardPage({ onLogout }) {
             {isAdmin && (
               <button
                 onClick={() => setActiveNav('ADMIN')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                className={`cursor-pointer rounded-xl px-3 py-2 text-xs font-bold transition ${
                   activeNav === 'ADMIN' ? 'bg-slate-800 text-blue-400' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -52,54 +65,54 @@ export default function DashboardPage({ onLogout }) {
         </div>
 
         <div className='flex items-center space-x-4'>
-          <span className='text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700'>
-            Rol: <strong className='text-blue-400'>{isAdmin ? 'Administrador' : 'Coordinador'}</strong>
+          <span className='rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300'>
+            Rol: <strong className='text-blue-400'>{roleLabels[role] || 'Sin rol'}</strong>
           </span>
           <button
             onClick={onLogout}
-            className='text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-4 py-2 rounded-xl hover:bg-red-500/20 transition font-semibold cursor-pointer'
+            className='cursor-pointer rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20'
           >
             Cerrar Sesión
           </button>
         </div>
       </header>
 
-      {/* Vista principal dinámica */}
-      <main className='flex-1 p-6 max-w-7xl mx-auto w-full space-y-6'>
+      <main className='mx-auto w-full max-w-7xl flex-1 space-y-6 p-6'>
         {activeNav === 'MATCHES' && <MatchesSection isAdmin={isAdmin} />}
 
         {activeNav === 'ADMIN' && isAdmin && (
           <div className='space-y-6'>
-            <div className='flex items-center space-x-2 border-b border-slate-800 pb-3'>
+            <div className='flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3'>
               <button
                 onClick={() => setAdminTab('CATEGORIES')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  adminTab === 'CATEGORIES' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-900 text-slate-400 hover:text-white'
-                }`}
+                className={tabClass('CATEGORIES')}
               >
                 📁 Categorías
               </button>
               <button
                 onClick={() => setAdminTab('TEAMS')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  adminTab === 'TEAMS' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-900 text-slate-400 hover:text-white'
-                }`}
+                className={tabClass('TEAMS')}
               >
                 🛡️ Equipos
               </button>
               <button
                 onClick={() => setAdminTab('SEASONS')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  adminTab === 'SEASONS' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-900 text-slate-400 hover:text-white'
-                }`}
+                className={tabClass('SEASONS')}
               >
                 📅 Temporadas
+              </button>
+              <button
+                onClick={() => setAdminTab('VENUES')}
+                className={tabClass('VENUES')}
+              >
+                🏟️ Instalaciones
               </button>
             </div>
 
             {adminTab === 'CATEGORIES' && <AdminCategories />}
             {adminTab === 'TEAMS' && <AdminTeams />}
             {adminTab === 'SEASONS' && <AdminSeasons />}
+            {adminTab === 'VENUES' && <AdminVenues />}
           </div>
         )}
       </main>
