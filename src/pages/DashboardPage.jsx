@@ -6,6 +6,7 @@ import AdminSeasons from '../components/admin/AdminSeasons'
 import AdminVenues from '../components/admin/AdminVenues'
 import AdminPlayers from '../components/admin/AdminPlayers'
 import AdminTeamRosters from '../components/admin/AdminTeamRosters'
+import AdminCoaches from '../components/admin/AdminCoaches'
 
 export default function DashboardPage({ onLogout }) {
   const role = localStorage.getItem('userRole')
@@ -111,6 +112,12 @@ export default function DashboardPage({ onLogout }) {
                 👥 Jugadores
               </button>
               <button
+                onClick={() => setAdminTab('COACHES')}
+                className={tabClass('COACHES')}
+              >
+                🧑‍🏫 Cuerpo técnico
+              </button>
+              <button
                 onClick={() => {
                   setRosterTeamId('')
                   setAdminTab('ROSTERS')
@@ -136,6 +143,7 @@ export default function DashboardPage({ onLogout }) {
             {adminTab === 'CATEGORIES' && <AdminCategories />}
             {adminTab === 'TEAMS' && <AdminTeams onManageRoster={openTeamRoster} />}
             {adminTab === 'PLAYERS' && <AdminPlayers />}
+            {adminTab === 'COACHES' && <AdminCoaches />}
             {adminTab === 'ROSTERS' && <AdminTeamRosters initialTeamId={rosterTeamId} />}
             {adminTab === 'SEASONS' && <AdminSeasons />}
             {adminTab === 'VENUES' && <AdminVenues />}

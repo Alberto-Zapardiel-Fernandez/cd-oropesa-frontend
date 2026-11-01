@@ -4,7 +4,13 @@ import Input from '../components/common/Input'
 export default function LoginPage({ onLoginSuccess }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => {
+    const sessionExpired = sessionStorage.getItem('sessionExpired') === 'true'
+    sessionStorage.removeItem('sessionExpired')
+    return sessionExpired
+      ? 'Tu sesión ha caducado. Inicia sesión de nuevo para continuar. Si tenías cambios sin guardar, tendrás que volver a introducirlos.'
+      : ''
+  })
   const [loading, setLoading] = useState(false)
 
   const handleLogin = async e => {

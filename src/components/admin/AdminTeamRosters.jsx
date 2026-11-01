@@ -5,6 +5,12 @@ import { CARD_STYLES } from '../common/theme'
 
 const SELECT_STYLES =
   'w-full min-w-0 rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600'
+const POSITION_OPTIONS = [
+  { value: 'GOALKEEPER', label: 'Portero' },
+  { value: 'DEFENDER', label: 'Defensa' },
+  { value: 'MIDFIELDER', label: 'Centrocampista' },
+  { value: 'FORWARD', label: 'Delantero' }
+]
 
 const normalizeDorsal = dorsal => {
   if (typeof dorsal === 'number' || typeof dorsal === 'string') return dorsal
@@ -19,7 +25,11 @@ const createDrafts = roster =>
   Object.fromEntries(
     roster.map(entry => [
       entry.id,
-      { dorsal: normalizeDorsal(entry.dorsal), status: entry.status }
+      {
+        dorsal: normalizeDorsal(entry.dorsal),
+        status: entry.status,
+        positions: entry.positions || []
+      }
     ])
   )
 
@@ -30,6 +40,7 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
   const [teamPlayers, setTeamPlayers] = useState([])
   const [playerToAdd, setPlayerToAdd] = useState('')
   const [dorsalToAdd, setDorsalToAdd] = useState('')
+  const [positionsToAdd, setPositionsToAdd] = useState([])
   const [rosterDrafts, setRosterDrafts] = useState({})
   const [loadingData, setLoadingData] = useState(true)
   const [loadingRoster, setLoadingRoster] = useState(Boolean(initialTeamId))
@@ -101,6 +112,7 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
     setRosterDrafts({})
     setPlayerToAdd('')
     setDorsalToAdd('')
+    setPositionsToAdd([])
     setLoadingRoster(Boolean(event.target.value))
     setError('')
     setNotice('')
@@ -120,6 +132,7 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
         body: JSON.stringify({
           playerId: playerToAdd,
           dorsal: dorsalToAdd === '' ? null : Number(dorsalToAdd),
+          positions: positionsToAdd,
           status: 'PENDING_DOCS'
         })
       })
@@ -135,7 +148,8 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
           ...current,
           [createdEntry.id]: {
             dorsal: normalizeDorsal(createdEntry.dorsal) || dorsalToAdd,
-            status: createdEntry.status || 'PENDING_DOCS'
+            status: createdEntry.status || 'PENDING_DOCS',
+            positions: createdEntry.positions || []
           }
         }))
         setError(`La inscripción se guardó, pero no se pudo refrescar la plantilla: ${refreshError.message}`)
@@ -143,6 +157,7 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
 
       setPlayerToAdd('')
       setDorsalToAdd('')
+      setPositionsToAdd([])
     } catch (err) {
       setError(err.message || 'No se pudo inscribir al jugador en el equipo.')
     } finally {
@@ -164,7 +179,8 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
         body: JSON.stringify({
           dorsal: draft.dorsal === '' ? null : Number(draft.dorsal),
           clearDorsal: draft.dorsal === '',
-          status: draft.status
+          status: draft.status,
+          positions: draft.positions
         })
       })
 
@@ -173,7 +189,8 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
         ...current,
         [entry.id]: {
           dorsal: normalizeDorsal(updated.dorsal),
-          status: updated.status
+          status: updated.status,
+          positions: updated.positions || []
         }
       }))
       setNotice('Inscripción actualizada correctamente.')
@@ -211,7 +228,7 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
       <header>
         <h3 className='text-lg font-black tracking-wide text-white'>Plantillas de equipos</h3>
         <p className='mt-1 text-xs text-slate-400'>
-          Inscribe jugadores y gestiona su dorsal y estado para la temporada del equipo seleccionado.
+          Inscribe jugadores en uno o varios equipos y gestiona dorsal, demarcaciones y estado por equipo.
         </p>
       </header>
 
@@ -293,6 +310,14 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
                   />
                 </div>
 
+                <div className='min-w-0 sm:col-span-2'>
+                  <PositionSelector
+                    value={positionsToAdd}
+                    onChange={setPositionsToAdd}
+                    name='new-player-positions'
+                  />
+                </div>
+
                 <button
                   type='submit'
                   disabled={savingRoster || loadingRoster || !playerToAdd || (dorsalToAdd !== '' && (Number(dorsalToAdd) < 0 || Number(dorsalToAdd) > 99))}
@@ -320,7 +345,8 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
                   {teamPlayers.map(entry => {
                     const draft = rosterDrafts[entry.id] || {
                       dorsal: normalizeDorsal(entry.dorsal),
-                      status: entry.status
+                      status: entry.status,
+                      positions: entry.positions || []
                     }
                     const displayedDorsal = normalizeDorsal(draft.dorsal)
 
@@ -345,6 +371,17 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
                             [entry.id]: { ...draft, dorsal: event.target.value }
                           }))}
                         />
+
+                        <div className='min-w-0 sm:col-span-2 lg:col-span-3'>
+                          <PositionSelector
+                            value={draft.positions || []}
+                            onChange={positions => setRosterDrafts(current => ({
+                              ...current,
+                              [entry.id]: { ...draft, positions }
+                            }))}
+                            name={`positions-${entry.id}`}
+                          />
+                        </div>
 
                         <label className='min-w-0 space-y-1.5 text-xs font-bold uppercase tracking-wider text-slate-400'>
                           Estado
@@ -390,5 +427,45 @@ export default function AdminTeamRosters({ initialTeamId = '' }) {
         </>
       )}
     </div>
+  )
+}
+
+function PositionSelector({ value, onChange, name }) {
+  const selectedPositions = value || []
+
+  const togglePosition = position => {
+    onChange(
+      selectedPositions.includes(position)
+        ? selectedPositions.filter(item => item !== position)
+        : [...selectedPositions, position]
+    )
+  }
+
+  return (
+    <fieldset className='min-w-0 space-y-2'>
+      <legend className='text-xs font-bold uppercase tracking-wider text-slate-400'>
+        Demarcaciones (puedes elegir varias)
+      </legend>
+      <div className='flex flex-wrap gap-2'>
+        {POSITION_OPTIONS.map(option => (
+          <label
+            key={`${name}-${option.value}`}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition ${
+              selectedPositions.includes(option.value)
+                ? 'border-blue-500/50 bg-blue-500/10 text-blue-200'
+                : 'border-slate-700 bg-slate-900 text-slate-400'
+            }`}
+          >
+            <input
+              type='checkbox'
+              checked={selectedPositions.includes(option.value)}
+              onChange={() => togglePosition(option.value)}
+              className='accent-blue-600'
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   )
 }
