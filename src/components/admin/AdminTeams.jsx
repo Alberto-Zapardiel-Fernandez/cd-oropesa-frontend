@@ -21,7 +21,7 @@ const EMPTY_TEAM_FORM = {
 const SELECT_STYLES =
   'w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600'
 
-export default function AdminTeams() {
+export default function AdminTeams({ onManageRoster }) {
   const [opponents, setOpponents] = useState([])
   const [opponentForm, setOpponentForm] = useState(EMPTY_OPPONENT_FORM)
   const [opponentSearch, setOpponentSearch] = useState('')
@@ -50,7 +50,6 @@ export default function AdminTeams() {
         setTeams(teamsData)
         setCategories(categoriesData)
         setSeasons(seasonsData)
-
         setTeamForm(current => ({
           ...current,
           categoryId: categoriesData[0]?.id || '',
@@ -286,11 +285,19 @@ export default function AdminTeams() {
                     className={`flex items-start justify-between gap-3 px-4 py-3.5 ${CARD_STYLES.item}`}
                   >
                     <div className='min-w-0'>
-                      <span className='block text-sm font-bold text-white'>{opponent.name}</span>
-                      {opponent.contactPerson && <span className='mt-1 block text-xs text-slate-400'>Contacto: {opponent.contactPerson}</span>}
-                      {opponent.contactPhone && <span className='block text-xs text-slate-400'>Teléfono: {opponent.contactPhone}</span>}
+                      <span className='block break-words text-sm font-bold text-white [overflow-wrap:anywhere]'>{opponent.name}</span>
+                      {opponent.contactPerson && (
+                        <span className='mt-1 block break-words text-xs text-slate-400 [overflow-wrap:anywhere]'>
+                          Contacto: {opponent.contactPerson}
+                        </span>
+                      )}
+                      {opponent.contactPhone && (
+                        <span className='block break-words text-xs text-slate-400 [overflow-wrap:anywhere]'>Teléfono: {opponent.contactPhone}</span>
+                      )}
                       {opponent.contactEmail && <span className='block break-all text-xs text-slate-400'>Email: {opponent.contactEmail}</span>}
-                      {opponent.notes && <span className='mt-1 block text-xs text-slate-500'>{opponent.notes}</span>}
+                      {opponent.notes && (
+                        <span className='mt-1 block break-words text-xs text-slate-500 [overflow-wrap:anywhere]'>{opponent.notes}</span>
+                      )}
                     </div>
 
                     <button
@@ -414,16 +421,21 @@ export default function AdminTeams() {
                     key={team.id}
                     className={`flex items-center justify-between gap-3 px-4 py-3.5 ${CARD_STYLES.item}`}
                   >
-                    <div>
-                      <span className='block text-sm font-bold text-white'>{team.name}</span>
-                      <span className='mt-0.5 block text-[10px] text-slate-400'>
+                    <button
+                      type='button'
+                      onClick={() => onManageRoster?.(team)}
+                      className='min-w-0 flex-1 text-left'
+                    >
+                      <span className='block break-words text-sm font-bold text-white [overflow-wrap:anywhere]'>{team.name}</span>
+                      <span className='mt-0.5 block break-words text-[10px] text-slate-400 [overflow-wrap:anywhere]'>
                         {team.groupName || 'Sin grupo'}
                         {' · '}
                         {team.category?.name || 'Sin categoría'}
                         {' · '}
                         {team.season?.name || 'Sin temporada'}
                       </span>
-                    </div>
+                      <span className='mt-2 block text-xs font-semibold text-blue-400'>Gestionar plantilla</span>
+                    </button>
 
                     <button
                       type='button'
