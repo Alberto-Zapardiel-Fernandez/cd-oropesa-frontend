@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchApi } from '../../services/api'
+import { getMatchLocation } from '../matches/matchLocation'
 import { CARD_STYLES } from '../common/theme'
 
 const EMPTY_FORM = {
@@ -17,6 +18,10 @@ const EMPTY_FORM = {
 const INPUT_STYLES =
   'w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600'
 
+function sortByName(first, second) {
+  return first.name.localeCompare(second.name, 'es', { sensitivity: 'base' })
+}
+
 export default function AdminMatchForm({ initialMatch, onMatchCreated, onMatchUpdated, onCancel }) {
   const [teams, setTeams] = useState([])
   const [opponents, setOpponents] = useState([])
@@ -32,14 +37,21 @@ export default function AdminMatchForm({ initialMatch, onMatchCreated, onMatchUp
       try {
         const [teamsData, opponentsData, venuesData] = await Promise.all([fetchApi('/teams'), fetchApi('/opponents'), fetchApi('/venues')])
 
-        setTeams(teamsData)
-        setOpponents(opponentsData)
-        setVenues(venuesData)
+        const sortedTeams = [...teamsData].sort(sortByName)
+        const sortedOpponents = [...opponentsData].sort(sortByName)
+        const sortedVenues = [...venuesData].sort((first, second) => {
+          const nameOrder = sortByName(first, second)
+          return nameOrder || first.city.localeCompare(second.city, 'es', { sensitivity: 'base' })
+        })
+
+        setTeams(sortedTeams)
+        setOpponents(sortedOpponents)
+        setVenues(sortedVenues)
 
         setFormData({
-          teamId: initialMatch?.teamId || teamsData[0]?.id || '',
-          opponentId: initialMatch?.opponentId || opponentsData[0]?.id || '',
-          venueId: initialMatch?.venueId || venuesData.find(venue => venue.isHomeVenue)?.id || venuesData[0]?.id || '',
+          teamId: initialMatch?.teamId || sortedTeams[0]?.id || '',
+          opponentId: initialMatch?.opponentId || sortedOpponents[0]?.id || '',
+          venueId: initialMatch?.venueId || sortedVenues.find(venue => venue.isHomeVenue)?.id || sortedVenues[0]?.id || '',
           matchday: initialMatch?.matchday ?? '',
           matchDate: initialMatch?.matchDate || '',
           matchTime: initialMatch?.matchTime?.slice(0, 5) || '',
@@ -62,6 +74,12 @@ export default function AdminMatchForm({ initialMatch, onMatchCreated, onMatchUp
     setFormData(current => ({ ...current, [name]: value }))
   }
 
+  const selectedVenue = venues.find(venue => venue.id === formData.venueId)
+  const matchLocation = getMatchLocation(selectedVenue)
+  const venueIsUndetermined =
+    selectedVenue?.name?.toLocaleLowerCase('es').includes('por determinar') ||
+    selectedVenue?.city?.toLocaleLowerCase('es').includes('por determinar')
+
   const handleSubmit = async event => {
     event.preventDefault()
     setError('')
@@ -69,6 +87,23 @@ export default function AdminMatchForm({ initialMatch, onMatchCreated, onMatchUp
 
     if (!formData.teamId || !formData.opponentId || !formData.venueId) {
       setError('Selecciona el equipo, el rival y la instalación.')
+      return
+    }
+
+    const hasHomeScore = formData.homeScore !== ''
+    const hasAwayScore = formData.awayScore !== ''
+    if (hasHomeScore !== hasAwayScore) {
+      setError('Introduce los goles de ambos equipos o deja ambos campos vacíos.')
+      return
+    }
+
+    if (formData.status === 'COMPLETED' && !hasHomeScore) {
+      setError('Para marcar el partido como finalizado, introduce el resultado completo.')
+      return
+    }
+
+    if ((hasHomeScore || hasAwayScore) && matchLocation === 'UNKNOWN') {
+      setError('Confirma primero la instalación para saber qué equipo jugó como local y asignar correctamente el marcador.')
       return
     }
 
@@ -234,7 +269,7 @@ export default function AdminMatchForm({ initialMatch, onMatchCreated, onMatchUp
             </label>
 
             <label className='space-y-1.5 text-xs font-bold text-slate-400'>
-              Goles del equipo del club
+              Goles del equipo local
               <input
                 name='homeScore'
                 type='number'
@@ -246,7 +281,7 @@ export default function AdminMatchForm({ initialMatch, onMatchCreated, onMatchUp
             </label>
 
             <label className='space-y-1.5 text-xs font-bold text-slate-400'>
-              Goles del rival
+              Goles del equipo visitante
               <input
                 name='awayScore'
                 type='number'
@@ -256,6 +291,11 @@ export default function AdminMatchForm({ initialMatch, onMatchCreated, onMatchUp
                 className={INPUT_STYLES}
               />
             </label>
+
+            <p className='text-xs leading-relaxed text-slate-500 sm:col-span-2'>
+              El marcador siempre se guarda como local–visitante. {matchLocation === 'HOME' ? 'El equipo del club juega en casa.' : matchLocation === 'AWAY' ? 'El rival juega como local.' : 'La localía aún no se puede determinar.'}
+              {venueIsUndetermined && ' La jornada indica que el Oropesa juega fuera, pero falta confirmar el campo y la localidad.'}
+            </p>
 
             <label className='space-y-1.5 text-xs font-bold text-slate-400 sm:col-span-2'>
               Estado
