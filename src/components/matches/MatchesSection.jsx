@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { fetchApi } from '../../services/api'
 import AdminMatchForm from '../admin/AdminMatchForm'
 import MatchCard from './MatchCard'
 import { getMatchLocation } from './matchLocation'
-import { getNextWeekendRange, getPreviousWeekendRange } from './weekendRanges'
+import { getPreviousWeekendRange, getWeekendRange } from './weekendRanges'
+
+const FILTER_LABEL_STYLES = 'flex min-w-0 flex-col gap-1.5 text-xs font-medium text-slate-400'
+const FILTER_CONTROL_STYLES = 'h-11 w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
 
 function formatDate(date) {
   if (!date) return 'Fecha pendiente'
@@ -15,6 +19,52 @@ function formatDate(date) {
   }).format(new Date(`${date}T00:00:00`))
 }
 
+function formatWeekendRange(range) {
+  const saturday = new Date(`${range.start}T00:00:00`)
+  const sunday = new Date(`${range.end}T00:00:00`)
+  const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long' })
+  const saturdayMonth = monthFormatter.format(saturday)
+  const sundayMonth = monthFormatter.format(sunday)
+
+  if (saturday.getFullYear() === sunday.getFullYear() && saturday.getMonth() === sunday.getMonth()) {
+    return `Fin de semana ${saturday.getDate()} y ${sunday.getDate()} de ${sundayMonth} de ${sunday.getFullYear()}`
+  }
+
+  if (saturday.getFullYear() === sunday.getFullYear()) {
+    return `Fin de semana del ${saturday.getDate()} de ${saturdayMonth} al ${sunday.getDate()} de ${sundayMonth} de ${sunday.getFullYear()}`
+  }
+
+  return `Fin de semana del ${saturday.getDate()} de ${saturdayMonth} de ${saturday.getFullYear()} al ${sunday.getDate()} de ${sundayMonth} de ${sunday.getFullYear()}`
+}
+
+function getWeekendMatchRange(range) {
+  const friday = new Date(`${range.start}T00:00:00`)
+  friday.setDate(friday.getDate() - 1)
+
+  return {
+    start: [
+      friday.getFullYear(),
+      String(friday.getMonth() + 1).padStart(2, '0'),
+      String(friday.getDate()).padStart(2, '0')
+    ].join('-'),
+    end: range.end
+  }
+}
+
+function formatScheduleTitle(range, weekendMatches) {
+  const matchRange = getWeekendMatchRange(range)
+  const hasFridayMatch = weekendMatches.some(match => match.matchDate === matchRange.start)
+  if (!hasFridayMatch) return formatWeekendRange(range)
+
+  const friday = new Date(`${matchRange.start}T00:00:00`)
+  const sunday = new Date(`${matchRange.end}T00:00:00`)
+  const formatDateOptions = { day: 'numeric', month: 'long' }
+  const fridayLabel = new Intl.DateTimeFormat('es-ES', formatDateOptions).format(friday)
+  const sundayLabel = new Intl.DateTimeFormat('es-ES', formatDateOptions).format(sunday)
+
+  return `Partidos del ${fridayLabel} al ${sundayLabel} de ${sunday.getFullYear()}`
+}
+
 function formatStatus(status) {
   const statusLabels = {
     SCHEDULED: 'Programado',
@@ -23,6 +73,17 @@ function formatStatus(status) {
     POSTPONED: 'Aplazado'
   }
   return statusLabels[status] || 'Pendiente de confirmar'
+}
+
+function groupMatchesByLocation(matches) {
+  return [
+    { key: 'HOME', title: 'En Oropesa' },
+    { key: 'AWAY', title: 'Fuera' },
+    { key: 'UNKNOWN', title: 'Localía por confirmar' }
+  ].map(group => ({
+    ...group,
+    matches: matches.filter(match => match.matchLocation === group.key)
+  })).filter(group => group.matches.length > 0)
 }
 
 function enrichMatch(match, teams, opponents, venues) {
@@ -202,12 +263,92 @@ function MatchDetailsDialog({ match, onClose }) {
   )
 }
 
+function PrintableWeekend({ title, range, matches }) {
+  const dateRange = getWeekendMatchRange(range)
+  const hasFridayMatch = matches.some(match => match.matchDate === dateRange.start)
+  const groups = [
+    { key: 'HOME', title: 'En Oropesa' },
+    { key: 'AWAY', title: 'Fuera' },
+    { key: 'UNKNOWN', title: 'Localía por confirmar' }
+  ].map(group => ({
+    ...group,
+    matches: matches.filter(match => match.matchLocation === group.key)
+  })).filter(group => group.matches.length > 0)
+
+  return (
+    <section className='matches-print-weekend'>
+      <h2>{title}</h2>
+      <p className='matches-print-range'>
+        {formatDate(hasFridayMatch ? dateRange.start : range.start)} — {formatDate(range.end)}
+      </p>
+      {matches.length === 0 ? (
+        <p>No hay partidos programados para este fin de semana.</p>
+      ) : groups.map(group => (
+        <section key={group.key} className='matches-print-group'>
+          <h3>{group.title}</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha y hora</th>
+                <th>Partido</th>
+                <th>Resultado</th>
+                <th>Sede y localía</th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.matches.map(match => {
+                const firstTeam = match.matchLocation === 'UNKNOWN' ? match.teamName : match.homeTeam
+                const secondTeam = match.matchLocation === 'UNKNOWN' ? match.opponentName : match.awayTeam
+                const hasCompleteScore = match.homeScore != null && match.awayScore != null
+                const location = match.matchLocation === 'HOME'
+                  ? 'En Oropesa'
+                  : match.matchLocation === 'AWAY'
+                    ? 'Fuera'
+                    : 'Localía por confirmar'
+
+                return (
+                  <tr key={match.id}>
+                    <td>
+                      {match.date}<br />
+                      {match.time}<br />
+                      <span>{formatStatus(match.status)}</span>
+                    </td>
+                    <td>
+                      <strong>{firstTeam} — {secondTeam}</strong><br />
+                      <span>{match.category}{match.groupName ? ` · ${match.groupName}` : ''} · Jornada {match.matchday}</span>
+                    </td>
+                    <td>
+                      {hasCompleteScore ? `${match.homeScore} — ${match.awayScore}` : 'Pendiente'}
+                      {match.matchLocation === 'UNKNOWN' && hasCompleteScore && (
+                        <><br /><span>Marcador local–visitante</span></>
+                      )}
+                    </td>
+                    <td>
+                      {location}<br />
+                      <span>{match.location}</span>
+                      {match.venueAddress && <><br /><span>{match.venueAddress}</span></>}
+                      {match.venueMapsUrl && (
+                        <><br /><a href={match.venueMapsUrl}>Ver mapa</a></>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </section>
+      ))}
+    </section>
+  )
+}
+
 export default function MatchesSection({ isAdmin }) {
   const [matches, setMatches] = useState([])
   const [teams, setTeams] = useState([])
   const [opponents, setOpponents] = useState([])
   const [venues, setVenues] = useState([])
-  const [viewMode, setViewMode] = useState('weekend')
+  const [weekendOffset, setWeekendOffset] = useState(0)
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [filters, setFilters] = useState({
     categoryId: '',
     teamId: '',
@@ -261,8 +402,9 @@ export default function MatchesSection({ isAdmin }) {
     return () => window.cancelAnimationFrame(frameId)
   }, [editingMatch, showForm])
 
-  const weekendRange = getNextWeekendRange()
+  const weekendRange = getWeekendRange(weekendOffset)
   const previousWeekendRange = getPreviousWeekendRange()
+  const nextWeekendRange = getWeekendRange()
   const sortByName = (first, second) =>
     first.name.localeCompare(second.name, 'es', { sensitivity: 'base' })
   const sortedTeams = [...teams].sort(sortByName)
@@ -275,9 +417,34 @@ export default function MatchesSection({ isAdmin }) {
     if (dateOrder !== 0) return dateOrder
     return (a.matchTime || '99:99').localeCompare(b.matchTime || '99:99')
   })
+  const getMatchesForWeekend = range => {
+    const matchRange = getWeekendMatchRange(range)
+    return sortedMatches.filter(match =>
+      match.matchDate >= matchRange.start && match.matchDate <= matchRange.end
+    )
+  }
+  const printableWeekends = [
+    {
+      key: 'previous',
+      title: 'Fin de semana pasado',
+      range: previousWeekendRange
+    },
+    {
+      key: 'next',
+      title: 'Próximo fin de semana',
+      range: nextWeekendRange
+    }
+  ].map(weekend => {
+    const weekendMatches = getMatchesForWeekend(weekend.range)
+    return {
+      ...weekend,
+      title: formatScheduleTitle(weekend.range, weekendMatches),
+      matches: weekendMatches
+    }
+  })
+  const selectedWeekendMatchRange = getWeekendMatchRange(weekendRange)
   const visibleMatches = sortedMatches.filter(match => {
-    const activeRange = viewMode === 'weekend' ? weekendRange : viewMode === 'previous' ? previousWeekendRange : null
-    if (activeRange && (match.matchDate < activeRange.start || match.matchDate > activeRange.end)) return false
+    if (match.matchDate < selectedWeekendMatchRange.start || match.matchDate > selectedWeekendMatchRange.end) return false
     if (filters.categoryId && match.categoryId !== filters.categoryId) return false
     if (filters.teamId && match.teamId !== filters.teamId) return false
     if (filters.seasonId && match.seasonId !== filters.seasonId) return false
@@ -289,16 +456,8 @@ export default function MatchesSection({ isAdmin }) {
     if (filters.endDate && match.matchDate > filters.endDate) return false
     return true
   })
-
-  const groupedMatches = [
-    { key: 'HOME', title: 'En Oropesa', matches: visibleMatches.filter(match => match.matchLocation === 'HOME') },
-    { key: 'AWAY', title: 'Fuera', matches: visibleMatches.filter(match => match.matchLocation === 'AWAY') },
-    {
-      key: 'UNKNOWN',
-      title: 'Localía por confirmar',
-      matches: visibleMatches.filter(match => match.matchLocation === 'UNKNOWN')
-    }
-  ].filter(group => group.matches.length > 0)
+  const activeFilterCount = Object.values(filters).filter(Boolean).length
+  const locationGroups = groupMatchesByLocation(visibleMatches)
 
   const updateFilter = event => {
     const { name, value } = event.target
@@ -368,122 +527,181 @@ export default function MatchesSection({ isAdmin }) {
 
   return (
     <section className='space-y-6'>
-      <div className='flex flex-col gap-4 rounded-3xl border border-slate-800/80 bg-slate-900/80 p-6 shadow-xl sm:flex-row sm:items-center sm:justify-between'>
-        <div>
-          <h2 className='text-2xl font-black tracking-tight text-white'>Calendario de partidos</h2>
-          <p className='mt-1 text-xs text-slate-400'>
-            {viewMode === 'weekend'
-              ? `Próximo fin de semana: ${formatDate(weekendRange.start)} — ${formatDate(weekendRange.end)}.`
-              : viewMode === 'previous'
-                ? `Fin de semana pasado: ${formatDate(previousWeekendRange.start)} — ${formatDate(previousWeekendRange.end)}.`
-                : 'Consulta y filtra todos los partidos de la temporada.'}
-          </p>
-        </div>
-
-        <div className='flex flex-wrap items-center gap-2'>
-          <button
-            type='button'
-            onClick={() => setViewMode('weekend')}
-            aria-pressed={viewMode === 'weekend'}
-            className={`cursor-pointer rounded-xl border-2 px-3.5 py-2 text-xs font-bold transition ${
-              viewMode === 'weekend'
-                ? 'border-blue-300 bg-blue-600 text-white shadow-lg shadow-blue-950/40 ring-2 ring-blue-400/30'
-                : 'border-blue-500/40 bg-blue-500/10 text-blue-200 hover:border-blue-400 hover:bg-blue-500/20'
-            }`}
-          >
-            Próximo fin de semana
-          </button>
-          <button
-            type='button'
-            onClick={() => setViewMode('previous')}
-            aria-pressed={viewMode === 'previous'}
-            className={`cursor-pointer rounded-xl border-2 px-3.5 py-2 text-xs font-bold transition ${
-              viewMode === 'previous'
-                ? 'border-violet-300 bg-violet-600 text-white shadow-lg shadow-violet-950/40 ring-2 ring-violet-400/30'
-                : 'border-violet-500/40 bg-violet-500/10 text-violet-200 hover:border-violet-400 hover:bg-violet-500/20'
-            }`}
-          >
-            Fin de semana pasado
-          </button>
-          <button
-            type='button'
-            onClick={() => setViewMode('all')}
-            aria-pressed={viewMode === 'all'}
-            className={`cursor-pointer rounded-xl border-2 px-3.5 py-2 text-xs font-bold transition ${
-              viewMode === 'all'
-                ? 'border-cyan-300 bg-cyan-600 text-white shadow-lg shadow-cyan-950/40 ring-2 ring-cyan-400/30'
-                : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200 hover:border-cyan-400 hover:bg-cyan-500/20'
-            }`}
-          >
-            Todos los partidos
-          </button>
-
-          {isAdmin && (
+      <div className='rounded-3xl border border-slate-800/80 bg-slate-900/80 p-5 shadow-xl sm:p-6'>
+        <div className='grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center'>
+          <h2 className='text-center text-2xl font-black tracking-tight text-white lg:text-left'>Calendario de partidos</h2>
+          <nav aria-label='Navegación por fines de semana' className='flex justify-center'>
+            <div className='inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-1.5 sm:gap-3 sm:p-2'>
+              <button
+                type='button'
+                onClick={() => setWeekendOffset(offset => offset - 1)}
+                aria-label='Ver fin de semana anterior'
+                title='Fin de semana anterior'
+                className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-200 transition hover:border-blue-400 hover:bg-blue-500/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+              >
+                <svg aria-hidden='true' viewBox='0 0 20 20' fill='none' className='h-5 w-5'>
+                  <path d='m12.5 4-6 6 6 6' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
+                </svg>
+              </button>
+              <p aria-live='polite' className='min-w-0 px-1 text-center text-xs font-bold leading-relaxed text-white sm:px-2 sm:text-sm'>
+                {formatScheduleTitle(weekendRange, getMatchesForWeekend(weekendRange))}
+              </p>
+              <button
+                type='button'
+                onClick={() => setWeekendOffset(offset => offset + 1)}
+                aria-label='Ver fin de semana siguiente'
+                title='Fin de semana siguiente'
+                className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-200 transition hover:border-blue-400 hover:bg-blue-500/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+              >
+                <svg aria-hidden='true' viewBox='0 0 20 20' fill='none' className='h-5 w-5'>
+                  <path d='m7.5 4 6 6-6 6' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
+                </svg>
+              </button>
+            </div>
+          </nav>
+          <div className='flex flex-wrap items-center justify-center gap-2 lg:justify-end'>
             <button
               type='button'
-              onClick={() => {
-                setEditingMatch(null)
-                setShowForm(open => !open)
-              }}
-              className='rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-500'
+              onClick={() => window.print()}
+              disabled={loading || Boolean(error)}
+              title='En el diálogo de impresión, selecciona «Guardar como PDF».'
+              aria-label='Imprimir o guardar el resumen de partidos como PDF'
+              className='inline-flex items-center gap-2 rounded-xl border-2 border-red-500/40 bg-red-500/10 px-3.5 py-2 text-xs font-bold text-red-200 transition hover:border-red-400 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50'
             >
-              {showForm ? 'Cancelar' : '+ Añadir partido'}
+              <svg
+                aria-hidden='true'
+                viewBox='0 0 24 24'
+                fill='none'
+                className='h-5 w-5 shrink-0 text-red-400'
+              >
+                <path
+                  d='M7 3.75h7l4.25 4.25v11A1.25 1.25 0 0 1 17 20.25H7A1.25 1.25 0 0 1 5.75 19V5A1.25 1.25 0 0 1 7 3.75Z'
+                  stroke='currentColor'
+                  strokeWidth='1.5'
+                  strokeLinejoin='round'
+                />
+                <path d='M14 4v4h4' stroke='currentColor' strokeWidth='1.5' strokeLinejoin='round' />
+                <path d='M8 14.25h8M8 17h5' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
+              </svg>
+              <span>PDF</span>
             </button>
-          )}
+
+            {isAdmin && (
+              <button
+                type='button'
+                onClick={() => {
+                  setEditingMatch(null)
+                  setShowForm(open => !open)
+                }}
+                className='rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-500'
+              >
+                {showForm ? 'Cancelar' : '+ Añadir partido'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       <div className='rounded-3xl border border-slate-800/80 bg-slate-900/70 p-5'>
         <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
-          <h3 className='text-sm font-bold text-white'>Filtros</h3>
-          <button type='button' onClick={clearFilters} className='text-xs font-semibold text-blue-300 hover:text-blue-200'>
-            Limpiar filtros
+          <button
+            type='button'
+            onClick={() => setFiltersExpanded(expanded => !expanded)}
+            aria-expanded={filtersExpanded}
+            aria-controls='matches-filters'
+            className='inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-left text-sm font-bold text-white transition hover:bg-slate-800/70 focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+          >
+            <svg
+              aria-hidden='true'
+              viewBox='0 0 20 20'
+              fill='none'
+              className={`h-4 w-4 text-slate-400 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`}
+            >
+              <path d='m5 7.5 5 5 5-5' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' />
+            </svg>
+            <span>Filtros</span>
+            {activeFilterCount > 0 && (
+              <span className='rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-200'>
+                {activeFilterCount} activos
+              </span>
+            )}
+            <span className='sr-only'>{filtersExpanded ? 'Ocultar filtros' : 'Mostrar filtros'}</span>
           </button>
+          {activeFilterCount > 0 && (
+            <button type='button' onClick={clearFilters} className='rounded-lg px-2 py-2 text-xs font-semibold text-blue-300 hover:bg-slate-800/70 hover:text-blue-200'>
+              Limpiar filtros
+            </button>
+          )}
         </div>
-        <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-          <select name='seasonId' value={filters.seasonId} onChange={updateFilter} aria-label='Filtrar por temporada' className='rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white'>
-            <option value=''>Todas las temporadas</option>
-            {seasons.map(season => <option key={season.id} value={season.id}>{season.name}</option>)}
-          </select>
-          <select name='categoryId' value={filters.categoryId} onChange={updateFilter} aria-label='Filtrar por categoría' className='rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white'>
-            <option value=''>Todas las categorías</option>
-            {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-          </select>
-          <select name='teamId' value={filters.teamId} onChange={updateFilter} aria-label='Filtrar por equipo' className='rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white'>
-            <option value=''>Todos los equipos</option>
-            {sortedTeams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
-          </select>
-          <select name='matchday' value={filters.matchday} onChange={updateFilter} aria-label='Filtrar por jornada' className='rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white'>
-            <option value=''>Todas las jornadas</option>
-            {matchdays.map(matchday => <option key={matchday} value={matchday}>Jornada {matchday}</option>)}
-          </select>
-          <select name='opponentId' value={filters.opponentId} onChange={updateFilter} aria-label='Filtrar por rival' className='rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white'>
-            <option value=''>Todos los rivales</option>
-            {sortedOpponents.map(opponent => <option key={opponent.id} value={opponent.id}>{opponent.name}</option>)}
-          </select>
-          <select name='status' value={filters.status} onChange={updateFilter} aria-label='Filtrar por estado' className='rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white'>
-            <option value=''>Todos los estados</option>
-            <option value='SCHEDULED'>Programado</option>
-            <option value='COMPLETED'>Finalizado</option>
-            <option value='SUSPENDED'>Suspendido</option>
-            <option value='POSTPONED'>Aplazado</option>
-          </select>
-          <select name='location' value={filters.location} onChange={updateFilter} aria-label='Filtrar por localía' className='rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white'>
-            <option value=''>En casa o fuera</option>
-            <option value='HOME'>En Oropesa</option>
-            <option value='AWAY'>Fuera</option>
-            <option value='UNKNOWN'>Localía por confirmar</option>
-          </select>
-          <label className='flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-400'>
-            Desde
-            <input type='date' name='startDate' value={filters.startDate} onChange={updateFilter} className='min-w-0 flex-1 bg-transparent text-sm text-white' />
-          </label>
-          <label className='flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-400'>
-            Hasta
-            <input type='date' name='endDate' value={filters.endDate} onChange={updateFilter} className='min-w-0 flex-1 bg-transparent text-sm text-white' />
-          </label>
+        <div id='matches-filters' hidden={!filtersExpanded} className='border-t border-slate-800/80 pt-4'>
+            <div className='grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+              <label className={FILTER_LABEL_STYLES}>
+                Temporada
+                <select name='seasonId' value={filters.seasonId} onChange={updateFilter} aria-label='Filtrar por temporada' className={FILTER_CONTROL_STYLES}>
+                  <option value=''>Todas las temporadas</option>
+                  {seasons.map(season => <option key={season.id} value={season.id}>{season.name}</option>)}
+                </select>
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Categoría
+                <select name='categoryId' value={filters.categoryId} onChange={updateFilter} aria-label='Filtrar por categoría' className={FILTER_CONTROL_STYLES}>
+                  <option value=''>Todas las categorías</option>
+                  {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+                </select>
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Equipo
+                <select name='teamId' value={filters.teamId} onChange={updateFilter} aria-label='Filtrar por equipo' className={FILTER_CONTROL_STYLES}>
+                  <option value=''>Todos los equipos</option>
+                  {sortedTeams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                </select>
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Jornada
+                <select name='matchday' value={filters.matchday} onChange={updateFilter} aria-label='Filtrar por jornada' className={FILTER_CONTROL_STYLES}>
+                  <option value=''>Todas las jornadas</option>
+                  {matchdays.map(matchday => <option key={matchday} value={matchday}>Jornada {matchday}</option>)}
+                </select>
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Rival
+                <select name='opponentId' value={filters.opponentId} onChange={updateFilter} aria-label='Filtrar por rival' className={FILTER_CONTROL_STYLES}>
+                  <option value=''>Todos los rivales</option>
+                  {sortedOpponents.map(opponent => <option key={opponent.id} value={opponent.id}>{opponent.name}</option>)}
+                </select>
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Estado
+                <select name='status' value={filters.status} onChange={updateFilter} aria-label='Filtrar por estado' className={FILTER_CONTROL_STYLES}>
+                  <option value=''>Todos los estados</option>
+                  <option value='SCHEDULED'>Programado</option>
+                  <option value='COMPLETED'>Finalizado</option>
+                  <option value='SUSPENDED'>Suspendido</option>
+                  <option value='POSTPONED'>Aplazado</option>
+                </select>
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Localía
+                <select name='location' value={filters.location} onChange={updateFilter} aria-label='Filtrar por localía' className={FILTER_CONTROL_STYLES}>
+                  <option value=''>En casa o fuera</option>
+                  <option value='HOME'>En Oropesa</option>
+                  <option value='AWAY'>Fuera</option>
+                  <option value='UNKNOWN'>Localía por confirmar</option>
+                </select>
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Desde
+                <input type='date' name='startDate' value={filters.startDate} onChange={updateFilter} className={FILTER_CONTROL_STYLES} />
+              </label>
+              <label className={FILTER_LABEL_STYLES}>
+                Hasta
+                <input type='date' name='endDate' value={filters.endDate} onChange={updateFilter} className={FILTER_CONTROL_STYLES} />
+              </label>
+            </div>
         </div>
-        <p className='mt-3 text-xs text-slate-500' aria-live='polite'>{visibleMatches.length} partidos</p>
+        <p className='mt-3 text-xs text-slate-500' aria-live='polite'>
+          {visibleMatches.length} partidos{activeFilterCount > 0 ? ` · ${activeFilterCount} filtros activos` : ''}
+        </p>
       </div>
 
       {isAdmin && showForm && !editingMatch && (
@@ -511,22 +729,34 @@ export default function MatchesSection({ isAdmin }) {
         <p className='rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-sm text-slate-400'>Cargando partidos...</p>
       ) : visibleMatches.length === 0 ? (
         <p className='rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-sm text-slate-500'>
-          {viewMode === 'weekend'
-            ? 'No hay partidos programados para el próximo fin de semana con estos filtros.'
-            : viewMode === 'previous'
-              ? 'No hay partidos del fin de semana pasado que coincidan con estos filtros.'
-              : 'No hay partidos que coincidan con los filtros seleccionados.'}
+          No hay partidos programados para este fin de semana que coincidan con los filtros.
         </p>
       ) : (
         <div className='space-y-8'>
-          {groupedMatches.map(group => (
-            <section key={group.key} aria-labelledby={`matches-${group.key}`}>
-              <h3 id={`matches-${group.key}`} className='mb-3 text-lg font-black text-white'>{group.title}</h3>
-              {renderMatchCards(group.matches)}
+          {locationGroups.map(locationGroup => (
+            <section key={locationGroup.key} aria-label={locationGroup.title}>
+              <h3 className='mb-3 text-lg font-black text-white'>{locationGroup.title}</h3>
+              {renderMatchCards(locationGroup.matches)}
             </section>
           ))}
         </div>
       )}
+
+      {createPortal(<div className='matches-print-content'>
+        <header className='matches-print-header'>
+          <h1>CD Oropesa · Calendario de partidos</h1>
+          <p>Resumen de resultados del fin de semana pasado y partidos del próximo fin de semana.</p>
+        </header>
+        {printableWeekends.map(weekend => (
+          <PrintableWeekend
+            key={weekend.key}
+            title={weekend.title}
+            range={weekend.range}
+            matches={weekend.matches}
+          />
+        ))}
+        <footer className='matches-print-footer'>CD Oropesa · Calendario para compartir</footer>
+      </div>, document.body)}
     </section>
   )
 }

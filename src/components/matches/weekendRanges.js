@@ -26,10 +26,10 @@ export function getNextWeekendRange(referenceDate = new Date()) {
   }
 }
 
-export function getPreviousWeekendRange(referenceDate = new Date()) {
+export function getWeekendRange(offset = 0, referenceDate = new Date()) {
   const nextWeekend = getNextWeekendRange(referenceDate)
   const saturday = new Date(`${nextWeekend.start}T00:00:00`)
-  saturday.setDate(saturday.getDate() - 7)
+  saturday.setDate(saturday.getDate() + offset * 7)
   const sunday = new Date(saturday)
   sunday.setDate(saturday.getDate() + 1)
 
@@ -37,4 +37,8 @@ export function getPreviousWeekendRange(referenceDate = new Date()) {
     start: getLocalDateKey(saturday),
     end: getLocalDateKey(sunday)
   }
+}
+
+export function getPreviousWeekendRange(referenceDate = new Date()) {
+  return getWeekendRange(-1, referenceDate)
 }

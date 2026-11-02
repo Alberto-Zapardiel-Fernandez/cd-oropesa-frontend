@@ -8,3 +8,136 @@ input[type="button"],
 [role="button"] {
   cursor: pointer;
 }
+
+.matches-print-content {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  body > *:not(.matches-print-content) {
+    display: none !important;
+  }
+
+  .matches-print-content {
+    display: block !important;
+    color: #172033 !important;
+    font-family: Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.4;
+  }
+
+  .matches-print-header {
+    border-bottom: 2px solid #0f766e;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+  }
+
+  .matches-print-header h1 {
+    color: #0f172a;
+    font-size: 20pt;
+    margin: 0;
+  }
+
+  .matches-print-header p,
+  .matches-print-range,
+  .matches-print-footer {
+    color: #475569;
+    margin: 5px 0 0;
+  }
+
+  .matches-print-weekend {
+    margin-top: 20px;
+  }
+
+  .matches-print-weekend h2 {
+    border-bottom: 1px solid #cbd5e1;
+    color: #0f172a;
+    font-size: 15pt;
+    margin: 0;
+    padding-bottom: 5px;
+  }
+
+  .matches-print-group {
+    break-inside: avoid;
+    margin-top: 14px;
+  }
+
+  .matches-print-group h3 {
+    color: #0f766e;
+    font-size: 11pt;
+    margin: 0 0 6px;
+  }
+
+  .matches-print-content table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .matches-print-content thead {
+    display: table-header-group;
+  }
+
+  .matches-print-content tr {
+    break-inside: avoid;
+  }
+
+  .matches-print-content th:nth-child(1),
+  .matches-print-content td:nth-child(1) {
+    width: 19%;
+  }
+
+  .matches-print-content th:nth-child(2),
+  .matches-print-content td:nth-child(2) {
+    width: 34%;
+  }
+
+  .matches-print-content th:nth-child(3),
+  .matches-print-content td:nth-child(3) {
+    width: 13%;
+  }
+
+  .matches-print-content th:nth-child(4),
+  .matches-print-content td:nth-child(4) {
+    width: 34%;
+  }
+
+  .matches-print-content th,
+  .matches-print-content td {
+    border: 1px solid #cbd5e1;
+    overflow-wrap: anywhere;
+    padding: 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .matches-print-content th {
+    background: #f1f5f9 !important;
+    color: #0f172a;
+    font-weight: 700;
+  }
+
+  .matches-print-content td span {
+    color: #475569;
+    font-size: 8pt;
+  }
+
+  .matches-print-content a {
+    color: #0369a1;
+  }
+
+  .matches-print-footer {
+    border-top: 1px solid #cbd5e1;
+    margin-top: 20px;
+    padding-top: 8px;
+  }
+}
