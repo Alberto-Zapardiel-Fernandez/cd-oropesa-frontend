@@ -29,7 +29,7 @@ export default function DashboardPage({ onLogout }) {
 
   return (
     <div className='flex min-h-screen flex-col bg-slate-950 text-white'>
-      <header className='flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/90 px-4 py-4 shadow-lg backdrop-blur-md sm:px-6'>
+      <header className='relative flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/90 px-4 py-4 shadow-lg backdrop-blur-md sm:px-6'>
         <div className='flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2'>
           <div className='flex items-center space-x-3'>
             <div className='relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-slate-700 bg-white p-1 shadow-md'>
@@ -67,7 +67,7 @@ export default function DashboardPage({ onLogout }) {
             )}
             <button
               onClick={onLogout}
-              className='cursor-pointer rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20'
+              className='cursor-pointer rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 lg:absolute lg:right-6 lg:top-1/2 lg:-translate-y-1/2'
             >
               Cerrar Sesión
             </button>
