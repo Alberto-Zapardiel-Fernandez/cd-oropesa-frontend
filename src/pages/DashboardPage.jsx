@@ -12,12 +12,6 @@ export default function DashboardPage({ onLogout }) {
   const role = localStorage.getItem('userRole')
   const isAdmin = role === 'ADMIN'
 
-  const roleLabels = {
-    ADMIN: 'Administrador',
-    COORDINATOR: 'Coordinador',
-    COACH: 'Entrenador',
-    VISITOR: 'Visitante'
-  }
   const [activeNav, setActiveNav] = useState('MATCHES')
   const [adminTab, setAdminTab] = useState('CATEGORIES')
   const [rosterTeamId, setRosterTeamId] = useState('')
@@ -71,19 +65,13 @@ export default function DashboardPage({ onLogout }) {
                 ⚙️ Administración
               </button>
             )}
+            <button
+              onClick={onLogout}
+              className='cursor-pointer rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20'
+            >
+              Cerrar Sesión
+            </button>
           </nav>
-        </div>
-
-        <div className='flex flex-wrap items-center justify-end gap-2'>
-          <span className='rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300'>
-            Rol: <strong className='text-blue-400'>{roleLabels[role] || 'Sin rol'}</strong>
-          </span>
-          <button
-            onClick={onLogout}
-            className='cursor-pointer rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20'
-          >
-            Cerrar Sesión
-          </button>
         </div>
       </header>
 
