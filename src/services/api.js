@@ -1,6 +1,13 @@
 // Servicio centralizado para llamadas HTTP a Spring Boot
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1'
 
+function redirectToLoginForExpiredSession() {
+  localStorage.removeItem('authToken')
+  localStorage.removeItem('userRole')
+  sessionStorage.setItem('sessionExpired', 'true')
+  window.location.href = '/'
+}
+
 export function validateSession(token) {
   return fetch(`${API_URL}/auth/session`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -29,11 +36,17 @@ export async function fetchApi(endpoint, options = {}) {
 
     // Si el token expira o no estás autorizado
     if (response.status === 401) {
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('userRole')
-      sessionStorage.setItem('sessionExpired', 'true')
-      window.location.href = '/' // Redirigir al login
+      redirectToLoginForExpiredSession()
       throw new Error('Sesión caducada. Por favor, vuelve a iniciar sesión.')
+    }
+
+    if (response.status === 403 && token) {
+      const sessionResponse = await validateSession(token)
+
+      if (sessionResponse.status === 401 || sessionResponse.status === 403) {
+        redirectToLoginForExpiredSession()
+        throw new Error('Sesión caducada. Por favor, vuelve a iniciar sesión.')
+      }
     }
 
     if (!response.ok) {
