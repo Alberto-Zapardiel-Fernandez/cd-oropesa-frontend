@@ -6,9 +6,16 @@ export default function LoginPage({ onLoginSuccess }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(() => {
     const sessionExpired = sessionStorage.getItem('sessionExpired') === 'true'
+    const sessionValidationFailed = sessionStorage.getItem('sessionValidationFailed') === 'true'
     sessionStorage.removeItem('sessionExpired')
-    return sessionExpired
-      ? 'Tu sesión ha caducado. Inicia sesión de nuevo para continuar. Si tenías cambios sin guardar, tendrás que volver a introducirlos.'
+    sessionStorage.removeItem('sessionValidationFailed')
+
+    if (sessionExpired) {
+      return 'Tu sesión ha caducado o ya no es válida. Inicia sesión de nuevo para continuar.'
+    }
+
+    return sessionValidationFailed
+      ? 'No se pudo validar tu sesión. Inicia sesión para continuar.'
       : ''
   })
   const [loading, setLoading] = useState(false)

@@ -1,6 +1,12 @@
 // Servicio centralizado para llamadas HTTP a Spring Boot
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1'
 
+export function validateSession(token) {
+  return fetch(`${API_URL}/auth/session`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+}
+
 export async function fetchApi(endpoint, options = {}) {
   const token = localStorage.getItem('authToken')
   const isFormData = options.body instanceof FormData
