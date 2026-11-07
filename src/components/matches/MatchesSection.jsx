@@ -123,13 +123,13 @@ function getMatchSummary(matches) {
   }, { wins: 0, draws: 0, losses: 0, points: 0 })
 }
 
-function MatchSummary({ summary }) {
+function MatchSummary({ summary, showPoints }) {
   return (
     <div className='flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-bold'>
       <span className='rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-300'>{summary.wins} Ganados</span>
       <span className='rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-300'>{summary.draws} Empates</span>
       <span className='rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300'>{summary.losses} Perdidos</span>
-      <span className='rounded-xl border border-slate-600 bg-slate-800/80 px-3 py-2 text-white'>{summary.points} Puntos</span>
+      {showPoints && <span className='rounded-xl border border-slate-600 bg-slate-800/80 px-3 py-2 text-white'>{summary.points} Puntos</span>}
     </div>
   )
 }
@@ -824,7 +824,7 @@ export default function MatchesSection({ isAdmin }) {
               {viewMode === 'history' ? (
                 <div className='mb-3 space-y-2 text-center'>
                   <h3 className='text-lg font-black text-white'>Resumen del Oropesa ({summaryContext})</h3>
-                  <MatchSummary summary={matchSummary} />
+                  <MatchSummary summary={matchSummary} showPoints={Boolean(filters.teamId)} />
                 </div>
               ) : (
                 <h3 className='mb-3 text-lg font-black text-white'>{locationGroup.title}</h3>
