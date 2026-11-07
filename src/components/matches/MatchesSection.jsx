@@ -96,6 +96,44 @@ function groupMatchesByLocation(matches) {
   })).filter(group => group.matches.length > 0)
 }
 
+function getMatchSummary(matches) {
+  return matches.reduce((summary, match) => {
+    if (
+      match.matchLocation === 'UNKNOWN' ||
+      match.homeScore == null ||
+      match.awayScore == null
+    ) {
+      return summary
+    }
+
+    const oropesaScore = match.matchLocation === 'AWAY' ? match.awayScore : match.homeScore
+    const opponentScore = match.matchLocation === 'AWAY' ? match.homeScore : match.awayScore
+
+    if (oropesaScore > opponentScore) {
+      summary.wins += 1
+      summary.points += 3
+    } else if (oropesaScore === opponentScore) {
+      summary.draws += 1
+      summary.points += 1
+    } else {
+      summary.losses += 1
+    }
+
+    return summary
+  }, { wins: 0, draws: 0, losses: 0, points: 0 })
+}
+
+function MatchSummary({ summary }) {
+  return (
+    <div className='flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-bold'>
+      <span className='text-emerald-300'>Oropesa {summary.wins} ganados</span>
+      <span className='text-amber-300'>{summary.draws} empates</span>
+      <span className='text-red-300'>{summary.losses} perdidos</span>
+      <span className='text-white'>{summary.points} puntos</span>
+    </div>
+  )
+}
+
 function enrichMatch(match, teams, opponents, venues) {
   const team = teams.find(item => item.id === match.teamId)
   const opponent = opponents.find(item => item.id === match.opponentId)
@@ -432,6 +470,7 @@ export default function MatchesSection({ isAdmin }) {
   const displayGroups = viewMode === 'history'
     ? [{ key: 'ALL', title: 'Todos los partidos', matches: visibleMatches }]
     : locationGroups
+  const matchSummary = viewMode === 'history' ? getMatchSummary(visibleMatches) : null
   const printTitle = viewMode === 'history'
     ? formatHistoryTitle(filters, seasons, sortedTeams)
     : formatScheduleTitle(weekendRange, getMatchesForWeekend(weekendRange))
@@ -779,7 +818,14 @@ export default function MatchesSection({ isAdmin }) {
         <div className='space-y-8'>
           {displayGroups.map(locationGroup => (
             <section key={locationGroup.key} aria-label={locationGroup.title}>
-              <h3 className='mb-3 text-lg font-black text-white'>{locationGroup.title}</h3>
+              {viewMode === 'history' ? (
+                <div className='mb-3 space-y-2 text-center'>
+                  <h3 className='text-lg font-black text-white'>Resumen del Oropesa</h3>
+                  <MatchSummary summary={matchSummary} />
+                </div>
+              ) : (
+                <h3 className='mb-3 text-lg font-black text-white'>{locationGroup.title}</h3>
+              )}
               {renderMatchCards(locationGroup.matches)}
             </section>
           ))}
