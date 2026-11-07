@@ -4,7 +4,7 @@ import { fetchApi } from '../../services/api'
 import AdminMatchForm from '../admin/AdminMatchForm'
 import MatchCard from './MatchCard'
 import { getMatchLocation } from './matchLocation'
-import { getPreviousWeekendRange, getWeekendRange } from './weekendRanges'
+import { getWeekendRange } from './weekendRanges'
 
 const FILTER_LABEL_STYLES = 'flex min-w-0 flex-col gap-1.5 text-xs font-medium text-slate-400'
 const FILTER_CONTROL_STYLES = 'h-11 w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30'
@@ -263,26 +263,12 @@ function MatchDetailsDialog({ match, onClose }) {
   )
 }
 
-function PrintableWeekend({ title, range, matches }) {
-  const dateRange = getWeekendMatchRange(range)
-  const hasFridayMatch = matches.some(match => match.matchDate === dateRange.start)
-  const groups = [
-    { key: 'HOME', title: 'En Oropesa' },
-    { key: 'AWAY', title: 'Fuera' },
-    { key: 'UNKNOWN', title: 'Localía por confirmar' }
-  ].map(group => ({
-    ...group,
-    matches: matches.filter(match => match.matchLocation === group.key)
-  })).filter(group => group.matches.length > 0)
-
+function PrintableWeekend({ title, groups }) {
   return (
     <section className='matches-print-weekend'>
       <h2>{title}</h2>
-      <p className='matches-print-range'>
-        {formatDate(hasFridayMatch ? dateRange.start : range.start)} — {formatDate(range.end)}
-      </p>
-      {matches.length === 0 ? (
-        <p>No hay partidos programados para este fin de semana.</p>
+      {groups.length === 0 ? (
+        <p>No hay partidos para el fin de semana y los filtros seleccionados.</p>
       ) : groups.map(group => (
         <section key={group.key} className='matches-print-group'>
           <h3>{group.title}</h3>
@@ -292,7 +278,6 @@ function PrintableWeekend({ title, range, matches }) {
                 <th>Fecha y hora</th>
                 <th>Partido</th>
                 <th>Resultado</th>
-                <th>Sede y localía</th>
               </tr>
             </thead>
             <tbody>
@@ -300,35 +285,28 @@ function PrintableWeekend({ title, range, matches }) {
                 const firstTeam = match.matchLocation === 'UNKNOWN' ? match.teamName : match.homeTeam
                 const secondTeam = match.matchLocation === 'UNKNOWN' ? match.opponentName : match.awayTeam
                 const hasCompleteScore = match.homeScore != null && match.awayScore != null
-                const location = match.matchLocation === 'HOME'
-                  ? 'En Oropesa'
-                  : match.matchLocation === 'AWAY'
-                    ? 'Fuera'
-                    : 'Localía por confirmar'
+                const shortDate = new Intl.DateTimeFormat('es-ES', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                }).format(new Date(`${match.matchDate}T00:00:00`))
 
                 return (
                   <tr key={match.id}>
                     <td>
-                      {match.date}<br />
+                      {shortDate}<br />
                       {match.time}<br />
-                      <span>{formatStatus(match.status)}</span>
+                      {(match.status === 'POSTPONED' || match.status === 'SUSPENDED') && (
+                        <span>{formatStatus(match.status)}</span>
+                      )}
                     </td>
                     <td>
-                      <strong>{firstTeam} — {secondTeam}</strong><br />
-                      <span>{match.category}{match.groupName ? ` · ${match.groupName}` : ''} · Jornada {match.matchday}</span>
+                      <strong className='matches-print-team-names'>{firstTeam} — {secondTeam}</strong>
                     </td>
                     <td>
                       {hasCompleteScore ? `${match.homeScore} — ${match.awayScore}` : 'Pendiente'}
                       {match.matchLocation === 'UNKNOWN' && hasCompleteScore && (
                         <><br /><span>Marcador local–visitante</span></>
-                      )}
-                    </td>
-                    <td>
-                      {location}<br />
-                      <span>{match.location}</span>
-                      {match.venueAddress && <><br /><span>{match.venueAddress}</span></>}
-                      {match.venueMapsUrl && (
-                        <><br /><a href={match.venueMapsUrl}>Ver mapa</a></>
                       )}
                     </td>
                   </tr>
@@ -403,8 +381,6 @@ export default function MatchesSection({ isAdmin }) {
   }, [editingMatch, showForm])
 
   const weekendRange = getWeekendRange(weekendOffset)
-  const previousWeekendRange = getPreviousWeekendRange()
-  const nextWeekendRange = getWeekendRange()
   const sortByName = (first, second) =>
     first.name.localeCompare(second.name, 'es', { sensitivity: 'base' })
   const sortedTeams = [...teams].sort(sortByName)
@@ -423,25 +399,6 @@ export default function MatchesSection({ isAdmin }) {
       match.matchDate >= matchRange.start && match.matchDate <= matchRange.end
     )
   }
-  const printableWeekends = [
-    {
-      key: 'previous',
-      title: 'Fin de semana pasado',
-      range: previousWeekendRange
-    },
-    {
-      key: 'next',
-      title: 'Próximo fin de semana',
-      range: nextWeekendRange
-    }
-  ].map(weekend => {
-    const weekendMatches = getMatchesForWeekend(weekend.range)
-    return {
-      ...weekend,
-      title: formatScheduleTitle(weekend.range, weekendMatches),
-      matches: weekendMatches
-    }
-  })
   const selectedWeekendMatchRange = getWeekendMatchRange(weekendRange)
   const visibleMatches = sortedMatches.filter(match => {
     if (match.matchDate < selectedWeekendMatchRange.start || match.matchDate > selectedWeekendMatchRange.end) return false
@@ -745,16 +702,12 @@ export default function MatchesSection({ isAdmin }) {
       {createPortal(<div className='matches-print-content'>
         <header className='matches-print-header'>
           <h1>CD Oropesa · Calendario de partidos</h1>
-          <p>Resumen de resultados del fin de semana pasado y partidos del próximo fin de semana.</p>
+          <p>Partidos del fin de semana y filtros seleccionados.</p>
         </header>
-        {printableWeekends.map(weekend => (
-          <PrintableWeekend
-            key={weekend.key}
-            title={weekend.title}
-            range={weekend.range}
-            matches={weekend.matches}
-          />
-        ))}
+        <PrintableWeekend
+          title={formatScheduleTitle(weekendRange, getMatchesForWeekend(weekendRange))}
+          groups={locationGroups}
+        />
         <footer className='matches-print-footer'>CD Oropesa · Calendario para compartir</footer>
       </div>, document.body)}
     </section>
