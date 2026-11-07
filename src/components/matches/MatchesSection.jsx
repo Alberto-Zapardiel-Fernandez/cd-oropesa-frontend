@@ -520,6 +520,7 @@ export default function MatchesSection({ isAdmin }) {
 
   const switchViewMode = mode => {
     setViewMode(mode)
+    setFiltersExpanded(false)
     setFilters({
       categoryId: '',
       teamId: '',
