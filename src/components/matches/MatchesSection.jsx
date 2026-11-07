@@ -429,6 +429,9 @@ export default function MatchesSection({ isAdmin }) {
   const hasMoreThanHistoryLimit = historyLimitApplies && matchesBeforeLimit.length > visibleMatches.length
   const activeFilterCount = Object.values(filters).filter(Boolean).length
   const locationGroups = groupMatchesByLocation(visibleMatches)
+  const displayGroups = viewMode === 'history'
+    ? [{ key: 'ALL', title: 'Todos los partidos', matches: visibleMatches }]
+    : locationGroups
   const printTitle = viewMode === 'history'
     ? formatHistoryTitle(filters, seasons, sortedTeams)
     : formatScheduleTitle(weekendRange, getMatchesForWeekend(weekendRange))
@@ -774,7 +777,7 @@ export default function MatchesSection({ isAdmin }) {
         </p>
       ) : (
         <div className='space-y-8'>
-          {locationGroups.map(locationGroup => (
+          {displayGroups.map(locationGroup => (
             <section key={locationGroup.key} aria-label={locationGroup.title}>
               <h3 className='mb-3 text-lg font-black text-white'>{locationGroup.title}</h3>
               {renderMatchCards(locationGroup.matches)}
@@ -800,11 +803,11 @@ export default function MatchesSection({ isAdmin }) {
       {createPortal(<div className='matches-print-content'>
         <header className='matches-print-header'>
           <h1>CD Oropesa · Calendario de partidos</h1>
-          <p>Partidos del fin de semana y filtros seleccionados.</p>
+          <p>{viewMode === 'history' ? 'Historial de partidos y filtros seleccionados.' : 'Partidos del fin de semana y filtros seleccionados.'}</p>
         </header>
         <PrintableWeekend
           title={printTitle}
-          groups={locationGroups}
+          groups={displayGroups}
         />
         <footer className='matches-print-footer'>CD Oropesa · Calendario para compartir</footer>
       </div>, document.body)}
