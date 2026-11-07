@@ -126,10 +126,10 @@ function getMatchSummary(matches) {
 function MatchSummary({ summary }) {
   return (
     <div className='flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-bold'>
-      <span className='text-emerald-300'>Oropesa {summary.wins} ganados</span>
-      <span className='text-amber-300'>{summary.draws} empates</span>
-      <span className='text-red-300'>{summary.losses} perdidos</span>
-      <span className='text-white'>{summary.points} puntos</span>
+      <span className='rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-300'>{summary.wins} Ganados</span>
+      <span className='rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-300'>{summary.draws} Empates</span>
+      <span className='rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300'>{summary.losses} Perdidos</span>
+      <span className='rounded-xl border border-slate-600 bg-slate-800/80 px-3 py-2 text-white'>{summary.points} Puntos</span>
     </div>
   )
 }
@@ -471,6 +471,9 @@ export default function MatchesSection({ isAdmin }) {
     ? [{ key: 'ALL', title: 'Todos los partidos', matches: visibleMatches }]
     : locationGroups
   const matchSummary = viewMode === 'history' ? getMatchSummary(visibleMatches) : null
+  const selectedSummaryTeam = sortedTeams.find(team => team.id === filters.teamId)?.name
+  const selectedSummaryCategory = categories.find(category => category.id === filters.categoryId)?.name
+  const summaryContext = selectedSummaryTeam || selectedSummaryCategory || 'Todos los equipos'
   const printTitle = viewMode === 'history'
     ? formatHistoryTitle(filters, seasons, sortedTeams)
     : formatScheduleTitle(weekendRange, getMatchesForWeekend(weekendRange))
@@ -820,7 +823,7 @@ export default function MatchesSection({ isAdmin }) {
             <section key={locationGroup.key} aria-label={locationGroup.title}>
               {viewMode === 'history' ? (
                 <div className='mb-3 space-y-2 text-center'>
-                  <h3 className='text-lg font-black text-white'>Resumen del Oropesa</h3>
+                  <h3 className='text-lg font-black text-white'>Resumen del Oropesa ({summaryContext})</h3>
                   <MatchSummary summary={matchSummary} />
                 </div>
               ) : (
