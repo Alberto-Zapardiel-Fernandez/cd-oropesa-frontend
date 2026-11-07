@@ -37,6 +37,16 @@ function formatWeekendRange(range) {
   return `Fin de semana del ${saturday.getDate()} de ${saturdayMonth} de ${saturday.getFullYear()} al ${sunday.getDate()} de ${sundayMonth} de ${sunday.getFullYear()}`
 }
 
+function formatHistoryTitle(filters, seasons, teams) {
+  const season = seasons.find(item => item.id === filters.seasonId)?.name
+  const team = teams.find(item => item.id === filters.teamId)?.name
+  const period = filters.startDate || filters.endDate
+    ? ` · ${filters.startDate || 'inicio'} — ${filters.endDate || 'actualidad'}`
+    : ''
+
+  return `Historial${team ? ` · ${team}` : ''}${season ? ` · ${season}` : ''}${period}`
+}
+
 function getWeekendMatchRange(range) {
   const friday = new Date(`${range.start}T00:00:00`)
   friday.setDate(friday.getDate() - 1)
@@ -326,6 +336,7 @@ export default function MatchesSection({ isAdmin }) {
   const [opponents, setOpponents] = useState([])
   const [venues, setVenues] = useState([])
   const [weekendOffset, setWeekendOffset] = useState(0)
+  const [viewMode, setViewMode] = useState('weekend')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [filters, setFilters] = useState({
     categoryId: '',
@@ -400,8 +411,8 @@ export default function MatchesSection({ isAdmin }) {
     )
   }
   const selectedWeekendMatchRange = getWeekendMatchRange(weekendRange)
-  const visibleMatches = sortedMatches.filter(match => {
-    if (match.matchDate < selectedWeekendMatchRange.start || match.matchDate > selectedWeekendMatchRange.end) return false
+  const matchesBeforeLimit = sortedMatches.filter(match => {
+    if (viewMode === 'weekend' && (match.matchDate < selectedWeekendMatchRange.start || match.matchDate > selectedWeekendMatchRange.end)) return false
     if (filters.categoryId && match.categoryId !== filters.categoryId) return false
     if (filters.teamId && match.teamId !== filters.teamId) return false
     if (filters.seasonId && match.seasonId !== filters.seasonId) return false
@@ -413,8 +424,35 @@ export default function MatchesSection({ isAdmin }) {
     if (filters.endDate && match.matchDate > filters.endDate) return false
     return true
   })
+  const historyLimitApplies = viewMode === 'history' && filters.seasonId && filters.teamId
+  const visibleMatches = historyLimitApplies ? matchesBeforeLimit.slice(0, 26) : matchesBeforeLimit
+  const hasMoreThanHistoryLimit = historyLimitApplies && matchesBeforeLimit.length > visibleMatches.length
   const activeFilterCount = Object.values(filters).filter(Boolean).length
   const locationGroups = groupMatchesByLocation(visibleMatches)
+  const printTitle = viewMode === 'history'
+    ? formatHistoryTitle(filters, seasons, sortedTeams)
+    : formatScheduleTitle(weekendRange, getMatchesForWeekend(weekendRange))
+  const weekendMatches = getMatchesForWeekend(weekendRange)
+  const candidateRestTeams = sortedTeams.filter(team => {
+    if (filters.teamId && team.id !== filters.teamId) return false
+    if (filters.seasonId && team.season?.id !== filters.seasonId) return false
+    if (filters.categoryId && team.category?.id !== filters.categoryId) return false
+    return true
+  })
+  const candidateTeamIds = new Set(candidateRestTeams.map(team => team.id))
+  const relevantWeekendMatches = weekendMatches.filter(match => candidateTeamIds.has(match.teamId))
+  const weekendTeamCounts = relevantWeekendMatches.reduce((entries, match) => {
+    entries.set(match.teamId, (entries.get(match.teamId) || 0) + 1)
+    return entries
+  }, new Map())
+  const teamsWithOneWeekendMatch = candidateRestTeams.filter(team => weekendTeamCounts.get(team.id) === 1)
+  const restingTeams = viewMode === 'weekend' &&
+    !filters.teamId &&
+    candidateRestTeams.length >= 3 &&
+    teamsWithOneWeekendMatch.length === candidateRestTeams.length - 1 &&
+    relevantWeekendMatches.length === teamsWithOneWeekendMatch.length
+    ? candidateRestTeams.filter(team => !weekendTeamCounts.has(team.id))
+    : []
 
   const updateFilter = event => {
     const { name, value } = event.target
@@ -433,6 +471,22 @@ export default function MatchesSection({ isAdmin }) {
       startDate: '',
       endDate: ''
     })
+  }
+
+  const switchViewMode = mode => {
+    setViewMode(mode)
+    setFilters({
+      categoryId: '',
+      teamId: '',
+      seasonId: '',
+      matchday: '',
+      opponentId: '',
+      status: '',
+      location: '',
+      startDate: '',
+      endDate: ''
+    })
+    if (mode === 'history') setFiltersExpanded(true)
   }
 
   const renderMatchCards = matchesToRender => (
@@ -488,7 +542,8 @@ export default function MatchesSection({ isAdmin }) {
         <div className='grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center'>
           <h2 className='text-center text-2xl font-black tracking-tight text-white lg:text-left'>Calendario de partidos</h2>
           <nav aria-label='Navegación por fines de semana' className='flex justify-center'>
-            <div className='inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-1.5 sm:gap-3 sm:p-2'>
+            {viewMode === 'weekend' ? (
+              <div className='inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-1.5 sm:gap-3 sm:p-2'>
               <button
                 type='button'
                 onClick={() => setWeekendOffset(offset => offset - 1)}
@@ -514,7 +569,12 @@ export default function MatchesSection({ isAdmin }) {
                   <path d='m7.5 4 6 6-6 6' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
                 </svg>
               </button>
-            </div>
+              </div>
+            ) : (
+              <p aria-live='polite' className='text-center text-xs font-bold leading-relaxed text-white sm:text-sm'>
+                {formatHistoryTitle(filters, seasons, sortedTeams)}
+              </p>
+            )}
           </nav>
           <div className='flex flex-wrap items-center justify-center gap-2 lg:justify-end'>
             <button
@@ -557,6 +617,27 @@ export default function MatchesSection({ isAdmin }) {
             )}
           </div>
         </div>
+      </div>
+
+      <div className='flex flex-wrap justify-center gap-2' role='tablist' aria-label='Tipo de consulta'>
+        <button
+          type='button'
+          role='tab'
+          aria-selected={viewMode === 'weekend'}
+          onClick={() => switchViewMode('weekend')}
+          className={`rounded-xl px-4 py-2 text-sm font-bold transition ${viewMode === 'weekend' ? 'bg-blue-600 text-white' : 'border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+        >
+          Próximo fin de semana
+        </button>
+        <button
+          type='button'
+          role='tab'
+          aria-selected={viewMode === 'history'}
+          onClick={() => switchViewMode('history')}
+          className={`rounded-xl px-4 py-2 text-sm font-bold transition ${viewMode === 'history' ? 'bg-blue-600 text-white' : 'border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}
+        >
+          Consultar historial
+        </button>
       </div>
 
       <div className='rounded-3xl border border-slate-800/80 bg-slate-900/70 p-5'>
@@ -658,6 +739,7 @@ export default function MatchesSection({ isAdmin }) {
         </div>
         <p className='mt-3 text-xs text-slate-500' aria-live='polite'>
           {visibleMatches.length} partidos{activeFilterCount > 0 ? ` · ${activeFilterCount} filtros activos` : ''}
+          {hasMoreThanHistoryLimit ? ' · Mostrando los primeros 26' : ''}
         </p>
       </div>
 
@@ -686,7 +768,9 @@ export default function MatchesSection({ isAdmin }) {
         <p className='rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-sm text-slate-400'>Cargando partidos...</p>
       ) : visibleMatches.length === 0 ? (
         <p className='rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-sm text-slate-500'>
-          No hay partidos programados para este fin de semana que coincidan con los filtros.
+          {viewMode === 'history'
+            ? 'No hay partidos que coincidan con los filtros históricos.'
+            : 'No hay partidos programados para este fin de semana que coincidan con los filtros.'}
         </p>
       ) : (
         <div className='space-y-8'>
@@ -696,6 +780,20 @@ export default function MatchesSection({ isAdmin }) {
               {renderMatchCards(locationGroup.matches)}
             </section>
           ))}
+          {restingTeams.length > 0 && (
+            <section aria-label='Equipos que descansan'>
+              <h3 className='mb-3 text-lg font-black text-white'>Descansan</h3>
+              <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
+                {restingTeams.map(team => (
+                  <article key={team.id} className='rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4'>
+                    <p className='text-xs font-bold uppercase tracking-wider text-amber-300'>Sin partido esta jornada</p>
+                    <h4 className='mt-1 text-lg font-black text-white'>{team.name}</h4>
+                    <p className='mt-1 text-sm text-amber-100/80'>Descanso identificado por el calendario de este fin de semana.</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -705,7 +803,7 @@ export default function MatchesSection({ isAdmin }) {
           <p>Partidos del fin de semana y filtros seleccionados.</p>
         </header>
         <PrintableWeekend
-          title={formatScheduleTitle(weekendRange, getMatchesForWeekend(weekendRange))}
+          title={printTitle}
           groups={locationGroups}
         />
         <footer className='matches-print-footer'>CD Oropesa · Calendario para compartir</footer>
