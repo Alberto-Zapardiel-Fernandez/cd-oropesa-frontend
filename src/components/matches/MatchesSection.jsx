@@ -531,7 +531,6 @@ export default function MatchesSection({ isAdmin }) {
       startDate: '',
       endDate: ''
     })
-    if (mode === 'history') setFiltersExpanded(true)
   }
 
   const renderMatchCards = matchesToRender => (
