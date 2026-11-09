@@ -311,7 +311,67 @@ function MatchDetailsDialog({ match, onClose }) {
   )
 }
 
+const PRINT_CATEGORY_COLORS = [
+  '#1d4ed8',
+  '#b45309',
+  '#047857',
+  '#7c3aed',
+  '#be123c',
+  '#0f766e',
+  '#4338ca',
+  '#9a3412'
+]
+
+const PRINT_CATEGORY_PREFERRED_COLORS = {
+  'infantil-cadete': '#db2777',
+  'senior femenino': '#7e22ce',
+  prebenjamin: '#1d4ed8',
+  benjamin: '#b45309',
+  alevin: '#047857',
+  infantil: '#0891b2',
+  cadete: '#ea580c',
+  juvenil: '#dc2626',
+  senior: '#334155',
+  femenino: '#9a3412'
+}
+
+function getPrintableCategoryKey(category) {
+  const normalized = (category || 'Sin categoría')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es')
+    .trim()
+
+  return normalized.includes('alevin') ? 'alevin' : normalized
+}
+
+function buildPrintableCategoryColorMap(groups) {
+  const categories = [...new Set(
+    groups.flatMap(group => group.matches.map(match => getPrintableCategoryKey(match.category)))
+  )].sort((first, second) => first.localeCompare(second, 'es'))
+
+  const usedColors = new Set()
+  let fallbackIndex = 0
+
+  return new Map(categories.map(category => {
+    const preferredColor = Object.entries(PRINT_CATEGORY_PREFERRED_COLORS)
+      .find(([name]) => category.includes(name) && !usedColors.has(PRINT_CATEGORY_PREFERRED_COLORS[name]))?.[1]
+    const color = preferredColor || PRINT_CATEGORY_COLORS.find(candidate => !usedColors.has(candidate))
+      || PRINT_CATEGORY_COLORS[fallbackIndex++ % PRINT_CATEGORY_COLORS.length]
+    usedColors.add(color)
+    return [category, color]
+  }))
+}
+
 function PrintableWeekend({ title, groups }) {
+  const categoryColors = buildPrintableCategoryColorMap(groups)
+  const categoryLabels = new Map(
+    groups.flatMap(group => group.matches).map(match => [
+      getPrintableCategoryKey(match.category),
+      getPrintableCategoryKey(match.category) === 'alevin' ? 'Alevín' : match.category || 'Sin categoría'
+    ])
+  )
+
   return (
     <section className='matches-print-weekend'>
       <h2>{title}</h2>
@@ -324,6 +384,7 @@ function PrintableWeekend({ title, groups }) {
             <thead>
               <tr>
                 <th>Fecha y hora</th>
+                <th>Categoría</th>
                 <th>Partido</th>
                 <th>Resultado</th>
               </tr>
@@ -338,23 +399,30 @@ function PrintableWeekend({ title, groups }) {
                   month: '2-digit',
                   year: 'numeric'
                 }).format(new Date(`${match.matchDate}T00:00:00`))
+                const categoryKey = getPrintableCategoryKey(match.category)
+                const categoryColor = categoryColors.get(categoryKey)
+                const categoryCellStyle = {
+                  backgroundColor: categoryColor,
+                  color: '#ffffff'
+                }
 
                 return (
-                  <tr key={match.id}>
-                    <td>
+                  <tr key={match.id} style={{ backgroundColor: categoryColor, color: '#ffffff' }}>
+                    <td style={categoryCellStyle}>
                       {shortDate}<br />
                       {match.time}<br />
                       {(match.status === 'POSTPONED' || match.status === 'SUSPENDED') && (
-                        <span>{formatStatus(match.status)}</span>
+                        <span style={{ color: '#ffffff' }}>{formatStatus(match.status)}</span>
                       )}
                     </td>
-                    <td>
+                    <td style={categoryCellStyle}>{categoryLabels.get(categoryKey)}</td>
+                    <td style={categoryCellStyle}>
                       <strong className='matches-print-team-names'>{firstTeam} — {secondTeam}</strong>
                     </td>
-                    <td>
+                    <td style={categoryCellStyle}>
                       {hasCompleteScore ? `${match.homeScore} — ${match.awayScore}` : 'Pendiente'}
                       {match.matchLocation === 'UNKNOWN' && hasCompleteScore && (
-                        <><br /><span>Marcador local–visitante</span></>
+                        <><br /><span style={{ color: '#ffffff' }}>Marcador local–visitante</span></>
                       )}
                     </td>
                   </tr>
@@ -364,6 +432,19 @@ function PrintableWeekend({ title, groups }) {
           </table>
         </section>
       ))}
+      {categoryColors.size > 0 && (
+        <aside className='matches-print-legend' aria-label='Leyenda de categorías'>
+          <strong>Leyenda de categorías</strong>
+          <div className='matches-print-legend-items'>
+            {[...categoryColors.entries()].map(([category, color]) => (
+              <span key={category} className='matches-print-legend-item'>
+                <i aria-hidden='true' style={{ backgroundColor: color }} />
+                {categoryLabels.get(category)}
+              </span>
+            ))}
+          </div>
+        </aside>
+      )}
     </section>
   )
 }
